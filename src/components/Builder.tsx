@@ -159,16 +159,21 @@ export default function Builder(){
     return items
   }
 
-  async function addToCart(){
-    const items = buildShopifyLineItems()
-    const r = await fetch('/api/add-to-cart', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items })
-    })
-    const { checkoutUrl, error } = await r.json()
-    if (error) { alert(error); return }
-    window.location.href = checkoutUrl
-  }
+async function addToCart(){
+  const items = buildShopifyLineItems()
+  const r = await fetch('/api/add-to-cart', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ items })
+  })
+  const { checkoutUrl, error } = await r.json()
+  if (error) { alert(error); return }
+
+  // ⬇️ break out of the Shopify iframe
+  const target = (typeof window !== 'undefined' && window.top) ? window.top : window
+  target.location.href = checkoutUrl
+}
+
 
   /* -------------------- Step Panels -------------------- */
   const StepType = (
