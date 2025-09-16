@@ -29,11 +29,13 @@ type GqlVariant = {
   product?: string
 }
 
-/* ---------- REST: exact match by SKU ---------- */
+// Replace your restVariantBySku with this:
+
 async function restVariantBySku(sku: string): Promise<RestVariant[]> {
+  // ask for a big page so the exact SKU is likely included
   const url =
     `https://${SHOP}/admin/api/2024-10/variants.json` +
-    `?sku=${encodeURIComponent(sku)}&fields=id,sku,product_id,price`
+    `?limit=250&fields=id,sku,product_id,price&sku=${encodeURIComponent(sku)}`
 
   const r = await fetch(url, {
     headers: { 'X-Shopify-Access-Token': TOKEN, 'Content-Type': 'application/json' },
@@ -41,14 +43,20 @@ async function restVariantBySku(sku: string): Promise<RestVariant[]> {
   if (!r.ok) throw new Error(`REST ${r.status}: ${await r.text()}`)
 
   const j = (await r.json()) as any
-  const variants: RestVariant[] = (j?.variants ?? []).map((v: any): RestVariant => ({
-    id: v.id,
-    sku: (v.sku ?? '').trim(),
-    product_id: v.product_id,
-    price: v.price != null ? Number(v.price) : null,
-  }))
+
+  // Map then FILTER to the **exact** SKU (trimmed)
+  const variants: RestVariant[] = (j?.variants ?? [])
+    .map((v: any): RestVariant => ({
+      id: v.id,
+      sku: (v.sku ?? '').trim(),
+      product_id: v.product_id,
+      price: v.price != null ? Number(v.price) : null,
+    }))
+    .filter((v: RestVariant) => v.sku === sku)   // ← critical line
+
   return variants
 }
+
 
 /* ---------- GraphQL fallback: fuzzy search ---------- */
 const GQL = `#graphql
