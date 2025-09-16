@@ -16,7 +16,7 @@ type Family = 'BatterySingle' | 'BatteryTwin' | 'Welding'
 const GAUGES: Record<Family, string[]> = {
   BatterySingle: ['0000','000','00','0','1','2','3','4','6','8','6mm'],
   BatteryTwin:   ['0000','000','00','0','1','2','3','4','6','8','6mm'],
-  Welding:       ['95mm2','75mm2','50mm2','0','1','2','3','4','6','8']
+  Welding:       ['95mm2','70mm2','50mm2','35mm2']
 }
 
 type EndType = 'Lug' | 'Anderson' | 'BatteryClamp' | 'Bare'
