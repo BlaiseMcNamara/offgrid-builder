@@ -1,47 +1,80 @@
 'use client'
+
 import React, { useMemo, useState } from 'react'
 import Stepper from './Stepper'
 
-/* ------- data (same prices; tweak anytime) ------- */
+/* -------------------------------------------------------
+   Pricing data (keys are strings for simpler TS indexing)
+------------------------------------------------------- */
 const BASE_PRICE_PER_M: Record<string, Record<string, number>> = {
   BatterySingle: { '0000': 48, '000': 44, '00': 40, '0': 34, '1': 31, '2': 28, '3': 24, '4': 20, '6': 16, '8': 12, '6mm': 4.2 },
   BatteryTwin:   { '0000': 92, '000': 86, '00': 79, '0': 68, '1': 62, '2': 56, '3': 48, '4': 40, '6': 32, '8': 24, '6mm': 8 },
   Welding:       { '0000': 50, '000': 46, '00': 42, '0': 36, '1': 33, '2': 30, '3': 26, '4': 22, '6': 18, '8': 13 }
 }
 
-const END_OPTIONS = {
-  Lug: { label: 'Tinned Lug', variants: [
-    { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole', compat: ['8','6mm','6'], cost: 2.5, assembly: 4 },
-    { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3'], cost: 3,   assembly: 4 },
-    { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3','2','1'], cost: 3.5, assembly: 5 },
-    { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole', compat: ['1','0'],   cost: 4.2, assembly: 5 },
-    { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole', compat: ['0','00'],  cost: 5.1, assembly: 5.5 },
-    { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole', compat: ['00','000'],cost: 6.2, assembly: 6 },
-    { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole', compat: ['000','0000'], cost: 7.4, assembly: 6.5 }
-  ]},
-  Anderson: { label: 'Anderson SB', variants: [
-    { id: 'sb50',  label: 'SB50',  compat: ['8','6','4','3'], cost: 9.9, assembly: 6 },
-    { id: 'sb120', label: 'SB120', compat: ['2','1','0'],     cost: 15.5, assembly: 6.5 },
-    { id: 'sb175', label: 'SB175', compat: ['0','00','000'],  cost: 19.9, assembly: 7 },
-    { id: 'sb350', label: 'SB350', compat: ['000','0000'],    cost: 29.9, assembly: 8 }
-  ]},
-  BatteryClamp: { label: 'Battery Clamp', variants: [
-    { id: 'post-pos', label: 'Top Post (+)', compat: ['4','3','2','1','0'], cost: 7.2, assembly: 5 },
-    { id: 'post-neg', label: 'Top Post (−)', compat: ['4','3','2','1','0'], cost: 7.2, assembly: 5 }
-  ]},
-  Bare: { label: 'Bare End', variants: [
-    { id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm','8','6','4','3','2','1','0','00','000','0000'], cost: 0, assembly: 1.5 }
-  ] }
-} as const
+/* -------------------------------------------------------
+   End options (typed with a shared interface)
+------------------------------------------------------- */
+type EndVariant = {
+  id: string
+  label: string
+  compat: readonly string[]   // supported gauges
+  cost: number
+  assembly: number
+}
+type EndType = 'Lug' | 'Anderson' | 'BatteryClamp' | 'Bare'
 
-type Family = keyof typeof BASE_PRICE_PER_M
-type Gauge  = keyof typeof BASE_PRICE_PER_M['BatterySingle']
-type EndChoice = { type: keyof typeof END_OPTIONS | ''; variantId: string | '' }
+const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = {
+  Lug: {
+    label: 'Tinned Lug',
+    variants: [
+      { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole', compat: ['8','6mm','6'], cost: 2.5, assembly: 4 },
+      { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3'],  cost: 3,   assembly: 4 },
+      { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3','2','1'],  cost: 3.5, assembly: 5 },
+      { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole',compat: ['1','0'],      cost: 4.2, assembly: 5 },
+      { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole',compat: ['0','00'],     cost: 5.1, assembly: 5.5 },
+      { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole',compat: ['00','000'],   cost: 6.2, assembly: 6 },
+      { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole',compat: ['000','0000'], cost: 7.4, assembly: 6.5 }
+    ]
+  },
+  Anderson: {
+    label: 'Anderson SB',
+    variants: [
+      { id: 'sb50',  label: 'SB50',  compat: ['8','6','4','3'], cost: 9.9,  assembly: 6 },
+      { id: 'sb120', label: 'SB120', compat: ['2','1','0'],     cost: 15.5, assembly: 6.5 },
+      { id: 'sb175', label: 'SB175', compat: ['0','00','000'],  cost: 19.9, assembly: 7 },
+      { id: 'sb350', label: 'SB350', compat: ['000','0000'],    cost: 29.9, assembly: 8 }
+    ]
+  },
+  BatteryClamp: {
+    label: 'Battery Clamp',
+    variants: [
+      { id: 'post-pos', label: 'Top Post (+)', compat: ['4','3','2','1','0'], cost: 7.2, assembly: 5 },
+      { id: 'post-neg', label: 'Top Post (−)', compat: ['4','3','2','1','0'], cost: 7.2, assembly: 5 }
+    ]
+  },
+  Bare: {
+    label: 'Bare End',
+    variants: [
+      { id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm','8','6','4','3','2','1','0','00','000','0000'], cost: 0, assembly: 1.5 }
+    ]
+  }
+}
 
-const cents = (n:number)=>Math.round(n*100)
+/* -------------------------------------------------------
+   Types for state
+------------------------------------------------------- */
+type Family = 'BatterySingle' | 'BatteryTwin' | 'Welding'
+type Gauge = string
+type EndChoice = { type: EndType | ''; variantId: string | '' }
+
+/* -------------------------------------------------------
+   Helpers
+------------------------------------------------------- */
+const cents   = (n:number)=>Math.round(n*100)
 const dollars = (c:number)=> (c/100).toFixed(2)
 
-/* simple cable svgs for tiles */
+/* Little SVGs for the cable tiles */
 const CableSVG = ({variant}:{variant:'single'|'welding'|'twin'}) => {
   if (variant === 'twin') return (
     <svg viewBox="0 0 220 80" width="100%" height="80">
@@ -64,6 +97,9 @@ const CableSVG = ({variant}:{variant:'single'|'welding'|'twin'}) => {
   )
 }
 
+/* =======================================================
+   Component
+======================================================= */
 export default function Builder(){
   const steps = ['Type','Gauge','Length','Ends','Extras','Review']
   const [step, setStep] = useState(0)
@@ -79,9 +115,11 @@ export default function Builder(){
   const [labelA, setLabelA] = useState(''); const [labelB, setLabelB] = useState('')
 
   const lengthCm = Math.round(lengthM*100)
-  const basePerM = BASE_PRICE_PER_M[family][gauge]
+  const basePerM = BASE_PRICE_PER_M[family][gauge] ?? 0
+
   const endVarA  = endA.type ? END_OPTIONS[endA.type].variants.find(v=>v.id===endA.variantId) : undefined
   const endVarB  = endB.type ? END_OPTIONS[endB.type].variants.find(v=>v.id===endB.variantId) : undefined
+
   const baseCableCents = cents(basePerM * (pairMode?2:1) * lengthM)
   const endCostCents   = cents((endVarA?endVarA.cost+endVarA.assembly:0) + (endVarB?endVarB.cost+endVarB.assembly:0))
   const sleeveCents    = cents(sleeve ? (pairMode?2:1) * (0.9*lengthM) : 0)
@@ -98,9 +136,10 @@ export default function Builder(){
 
   function incompatible(variantId?: string){
     if(!variantId) return false
-    const all = Object.values(END_OPTIONS).flatMap(o=>o.variants)
-    const v = all.find(x=>x.id===variantId); if(!v) return false
-    return !v.compat.includes(gauge as any)
+    const all: EndVariant[] = Object.values(END_OPTIONS).flatMap(o => o.variants)
+    const v = all.find(x => x.id === variantId)
+    if(!v) return false
+    return !v.compat.includes(gauge)
   }
 
   function buildShopifyLineItems(){
@@ -131,7 +170,7 @@ export default function Builder(){
     window.location.href = checkoutUrl
   }
 
-  /* ------- steps ui ------- */
+  /* -------------------- Step Panels -------------------- */
   const StepType = (
     <div className="card">
       <div className="section-title">Choose cable type</div>
@@ -182,16 +221,16 @@ export default function Builder(){
       <div className="row">
         <div>
           <div className="lede" style={{fontSize:13,marginBottom:4}}>End A</div>
-          <select value={endA.type} onChange={e=>setEndA({ type: e.target.value as any, variantId: '' })}>
+          <select value={endA.type} onChange={e=>setEndA({ type: e.target.value as EndType, variantId: '' })}>
             <option value="">— type —</option>
             {Object.entries(END_OPTIONS).map(([k,v])=>(<option key={k} value={k}>{v.label}</option>))}
           </select>
           {endA.type && (
             <select style={{marginTop:8}} value={endA.variantId} onChange={e=>setEndA(p=>({ ...p, variantId:e.target.value }))}>
               <option value="">— variant —</option>
-              {END_OPTIONS[endA.type as keyof typeof END_OPTIONS].variants.map(v=>(
-                <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge as any)}>
-                  {v.label}{!v.compat.includes(gauge as any) ? ' (incompatible)' : ''}
+              {END_OPTIONS[endA.type as EndType].variants.map(v=>(
+                <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge)}>
+                  {v.label}{!v.compat.includes(gauge) ? ' (incompatible)' : ''}
                 </option>
               ))}
             </select>
@@ -201,16 +240,16 @@ export default function Builder(){
 
         <div>
           <div className="lede" style={{fontSize:13,marginBottom:4}}>End B</div>
-          <select value={endB.type} onChange={e=>setEndB({ type: e.target.value as any, variantId: '' })}>
+          <select value={endB.type} onChange={e=>setEndB({ type: e.target.value as EndType, variantId: '' })}>
             <option value="">— type —</option>
             {Object.entries(END_OPTIONS).map(([k,v])=>(<option key={k} value={k}>{v.label}</option>))}
           </select>
           {endB.type && (
             <select style={{marginTop:8}} value={endB.variantId} onChange={e=>setEndB(p=>({ ...p, variantId:e.target.value }))}>
               <option value="">— variant —</option>
-              {END_OPTIONS[endB.type as keyof typeof END_OPTIONS].variants.map(v=>(
-                <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge as any)}>
-                  {v.label}{!v.compat.includes(gauge as any) ? ' (incompatible)' : ''}
+              {END_OPTIONS[endB.type as EndType].variants.map(v=>(
+                <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge)}>
+                  {v.label}{!v.compat.includes(gauge) ? ' (incompatible)' : ''}
                 </option>
               ))}
             </select>
