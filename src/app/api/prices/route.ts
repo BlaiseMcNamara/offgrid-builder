@@ -66,18 +66,26 @@ async function gqlLookup(skus: string[]): Promise<Map<string, number>> {
 
 /* ---------- REST exact fallback for any misses ---------- */
 type RestVariant = { id: string | number; sku: string; price: number | null }
+
 async function restExact(sku: string): Promise<RestVariant[]> {
   const url =
     `https://${SHOP}/admin/api/2024-10/variants.json` +
     `?limit=250&fields=id,sku,price&sku=${encodeURIComponent(sku)}`
+
   const r = await fetch(url, {
     headers: { 'X-Shopify-Access-Token': TOKEN, 'Content-Type': 'application/json' }
   })
   if (!r.ok) throw new Error(`REST ${r.status}: ${await r.text()}`)
+
   const j = await r.json() as any
   const variants: RestVariant[] = (j?.variants ?? [])
-    .map((v: any) => ({ id: v.id, sku: (v.sku ?? '').trim(), price: v.price != null ? Number(v.price) : null }))
-    .filter(v => v.sku === sku) // exact filter (Shopify can return a page)
+    .map((v: any): RestVariant => ({
+      id: v.id,
+      sku: (v.sku ?? '').trim(),
+      price: v.price != null ? Number(v.price) : null,
+    }))
+    .filter((v: RestVariant) => v.sku === sku) // <-- add type here
+
   return variants
 }
 
