@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Stepper from './Stepper'
 
 /* -------------------------------------------------------
-   Pricing data (keys are strings for simpler TS indexing)
+   Static fallbacks (used only if Shopify prices are missing)
 ------------------------------------------------------- */
 const BASE_PRICE_PER_M: Record<string, Record<string, number>> = {
   BatterySingle: { '0000': 48, '000': 44, '00': 40, '0': 34, '1': 31, '2': 28, '3': 24, '4': 20, '6': 16, '8': 12, '6mm': 4.2 },
@@ -13,14 +13,14 @@ const BASE_PRICE_PER_M: Record<string, Record<string, number>> = {
 }
 
 /* -------------------------------------------------------
-   End options (typed with a shared interface)
+   End options (shared interface so TS is happy)
 ------------------------------------------------------- */
 type EndVariant = {
   id: string
   label: string
-  compat: readonly string[]   // supported gauges
-  cost: number
-  assembly: number
+  compat: readonly string[]
+  cost: number        // fallback only
+  assembly: number    // fallback only
 }
 type EndType = 'Lug' | 'Anderson' | 'BatteryClamp' | 'Bare'
 
@@ -62,10 +62,10 @@ const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = 
 }
 
 /* -------------------------------------------------------
-   Types for state
+   State types
 ------------------------------------------------------- */
 type Family = 'BatterySingle' | 'BatteryTwin' | 'Welding'
-type Gauge = string
+type Gauge  = string
 type EndChoice = { type: EndType | ''; variantId: string | '' }
 
 /* -------------------------------------------------------
@@ -74,10 +74,10 @@ type EndChoice = { type: EndType | ''; variantId: string | '' }
 const cents   = (n:number)=>Math.round(n*100)
 const dollars = (c:number)=> (c/100).toFixed(2)
 
-/* Little SVGs for the cable tiles */
+/* Tiny SVG tiles */
 const CableSVG = ({variant}:{variant:'single'|'welding'|'twin'}) => {
   if (variant === 'twin') return (
-    <svg viewBox="0 0 220 80" width="100%" height="80">
+    <svg viewBox="0 0 220 80" width="100%" height="80" aria-hidden>
       <defs>
         <linearGradient id="g1" x1="0" x2="1"><stop offset="0" stopColor="#d64545"/><stop offset="1" stopColor="#b92f2f"/></linearGradient>
         <linearGradient id="g2" x1="0" x2="1"><stop offset="0" stopColor="#3c3f43"/><stop offset="1" stopColor="#2a2d30"/></linearGradient>
@@ -89,7 +89,7 @@ const CableSVG = ({variant}:{variant:'single'|'welding'|'twin'}) => {
   )
   const grad = variant==='single' ? ['#3c3f43','#2a2d30'] : ['#d64545','#b92f2f']
   return (
-    <svg viewBox="0 0 220 60" width="100%" height="60">
+    <svg viewBox="0 0 220 60" width="100%" height="60" aria-hidden>
       <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stopColor={grad[0]}/><stop offset="1" stopColor={grad[1]}/></linearGradient></defs>
       <rect x="8" y="18" rx="14" ry="14" width="200" height="24" fill="url(#g)"/>
       <circle cx="14" cy="30" r="8" fill="#cc7a38"/>
@@ -117,17 +117,59 @@ export default function Builder(){
   const lengthCm = Math.round(lengthM*100)
   const basePerM = BASE_PRICE_PER_M[family][gauge] ?? 0
 
+  /* ---------- Live prices from Shopify (via /api/prices) ---------- */
+  type PriceEntry = { price: number; cost: number|null }
+  const [prices, setPrices] = useState<Record<string, PriceEntry>>({})
+
+  useEffect(() => {
+    // Gather the SKUs we might need for the current selection.
+    const skuSet = new Set<string>()
+    skuSet.add(`CABLE-${family}-${gauge}-CM`)
+    skuSet.add(`SLEEVE-${gauge}-CM`)
+    skuSet.add('INSULATOR-LUG-BOOT')
+    Object.values(END_OPTIONS).forEach(g => g.variants.forEach(v => skuSet.add(`END-${v.id.toUpperCase()}`)))
+
+    fetch('/api/prices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skus: Array.from(skuSet) })
+    })
+      .then(r => r.json())
+      .then(d => setPrices(d?.prices || {}))
+      .catch(() => {}) // silent: UI falls back to static numbers
+  }, [family, gauge])
+
+  const getPrice = (sku: string, fallback: number) =>
+    prices[sku]?.price ?? fallback
+
+  /* ---------- Current selection lookups ---------- */
   const endVarA  = endA.type ? END_OPTIONS[endA.type].variants.find(v=>v.id===endA.variantId) : undefined
   const endVarB  = endB.type ? END_OPTIONS[endB.type].variants.find(v=>v.id===endB.variantId) : undefined
 
-  const baseCableCents = cents(basePerM * (pairMode?2:1) * lengthM)
-  const endCostCents   = cents((endVarA?endVarA.cost+endVarA.assembly:0) + (endVarB?endVarB.cost+endVarB.assembly:0))
-  const sleeveCents    = cents(sleeve ? (pairMode?2:1) * (0.9*lengthM) : 0)
-  const insulatorCents = cents(insulators?3.0:0)
+  /* ---------- Price math (uses Shopify where possible) ---------- */
+  // price per cm for cable (fallback to table /100)
+  const pricePerCm = getPrice(`CABLE-${family}-${gauge}-CM`, (basePerM || 0) / 100)
+  const baseCableCents = cents(pricePerCm * lengthCm * (pairMode ? 2 : 1))
+
+  // ends: use END-<ID> variant price
+  const endPriceA = endA.variantId ? getPrice(`END-${endA.variantId.toUpperCase()}`, (endVarA?.cost ?? 0) + (endVarA?.assembly ?? 0)) : 0
+  const endPriceB = endB.variantId ? getPrice(`END-${endB.variantId.toUpperCase()}`, (endVarB?.cost ?? 0) + (endVarB?.assembly ?? 0)) : 0
+  const endUnits = (pairMode ? 2 : 1)
+  const endCostCents = cents(endPriceA * endUnits + endPriceB * endUnits)
+
+  // sleeving per cm
+  const sleevePerCm = getPrice(`SLEEVE-${gauge}-CM`, 0)
+  const sleeveCents = cents(sleeve ? sleevePerCm * lengthCm * (pairMode ? 2 : 1) : 0)
+
+  // insulators (2 for single, 4 for twin)
+  const insBoot = getPrice('INSULATOR-LUG-BOOT', 0)
+  const insulatorCents = cents(insulators ? insBoot * (pairMode ? 4 : 2) : 0)
+
   const subtotal = baseCableCents + endCostCents + sleeveCents + insulatorCents
   const gst = Math.round(subtotal * 0.10)
   const total = subtotal + gst
 
+  /* ---------- UI helpers ---------- */
   const familyTiles = useMemo(() => ([
     { key:'BatterySingle', label:'Battery — Single Core', svg:<CableSVG variant="single" /> },
     { key:'Welding',       label:'Welding Cable',          svg:<CableSVG variant="welding" /> },
@@ -152,28 +194,27 @@ export default function Builder(){
     }else{
       items.push({ sku, quantity: lengthCm, properties: props })
     }
-    if(endVarA) items.push({ sku: `END-${endA.variantId.toUpperCase()}`, quantity: pairMode?2:1, properties:{ position:'A' } })
-    if(endVarB) items.push({ sku: `END-${endB.variantId.toUpperCase()}`, quantity: pairMode?2:1, properties:{ position:'B' } })
+    if(endVarA) items.push({ sku: `END-${endA.variantId.toUpperCase()}`, quantity: endUnits, properties:{ position:'A' } })
+    if(endVarB) items.push({ sku: `END-${endB.variantId.toUpperCase()}`, quantity: endUnits, properties:{ position:'B' } })
     if(sleeve) items.push({ sku: `SLEEVE-${gauge}-CM`, quantity: pairMode?lengthCm*2:lengthCm })
     if(insulators) items.push({ sku:`INSULATOR-LUG-BOOT`, quantity: pairMode?4:2 })
     return items
   }
 
-async function addToCart(){
-  const items = buildShopifyLineItems()
-  const r = await fetch('/api/add-to-cart', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ items })
-  })
-  const { checkoutUrl, error } = await r.json()
-  if (error) { alert(error); return }
+  async function addToCart(){
+    const items = buildShopifyLineItems()
+    const r = await fetch('/api/add-to-cart', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items })
+    })
+    const { checkoutUrl, error } = await r.json()
+    if (error) { alert(error); return }
 
-  // ⬇️ break out of the Shopify iframe
-  const target = (typeof window !== 'undefined' && window.top) ? window.top : window
-  target.location.href = checkoutUrl
-}
-
+    // Break out of Shopify iframe to the top window (checkout won’t render inside an iframe)
+    const target = (typeof window !== 'undefined' && window.top) ? window.top : window
+    target.location.href = checkoutUrl
+  }
 
   /* -------------------- Step Panels -------------------- */
   const StepType = (
@@ -202,7 +243,9 @@ async function addToCart(){
       <select value={gauge} onChange={e=>setGauge(e.target.value as Gauge)}>
         {Object.keys(BASE_PRICE_PER_M[family]).map(g=><option key={g} value={g}>{g}</option>)}
       </select>
-      <div className="lede" style={{fontSize:14,marginTop:6}}>Base: ${basePerM.toFixed(2)}/m (ex GST)</div>
+      <div className="lede" style={{fontSize:14,marginTop:6}}>
+        Base (fallback): ${basePerM.toFixed(2)}/m ex GST
+      </div>
     </div>
   )
 
