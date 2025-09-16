@@ -23,7 +23,7 @@ type EndType = 'Lug' | 'Anderson' | 'BatteryClamp' | 'Bare'
 type EndVariant = { id: string; label: string; compat: readonly string[] }
 const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = {
   Lug: {
-    label: 'Tinned Lug',
+    label: 'Battery Lug',
     variants: [
       { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole', compat: ['8','6mm','6'] },
       { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3']  },
@@ -373,7 +373,7 @@ useEffect(() => {
 
   return (
     <div className="container">
-      <h1 className="h1">Cable Designer</h1>
+      <h1 className="h1"></h1>
       <p className="lede">Build the exact cable you need. Clean, fast and precise.</p>
 
       <Stepper steps={steps} current={step} onGo={setStep} />
