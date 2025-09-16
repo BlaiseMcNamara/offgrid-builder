@@ -4,74 +4,65 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Stepper from './Stepper'
 
 /* -------------------------------------------------------
-   Static fallbacks (used only if Shopify prices are missing)
+   We don't store any prices here. All prices come from
+   Shopify via /api/prices using the SKUs we generate.
+   The only static data below is:
+   - gauge lists (for the dropdown)
+   - end option catalog (labels + gauge compatibility)
 ------------------------------------------------------- */
-const BASE_PRICE_PER_M: Record<string, Record<string, number>> = {
-  BatterySingle: { '0000': 48, '000': 44, '00': 40, '0': 34, '1': 31, '2': 28, '3': 24, '4': 20, '6': 16, '8': 12, '6mm': 4.2 },
-  BatteryTwin:   { '0000': 92, '000': 86, '00': 79, '0': 68, '1': 62, '2': 56, '3': 48, '4': 40, '6': 32, '8': 24, '6mm': 8 },
-  Welding:       { '0000': 50, '000': 46, '00': 42, '0': 36, '1': 33, '2': 30, '3': 26, '4': 22, '6': 18, '8': 13 }
+
+// Gauges you want to offer for each family
+type Family = 'BatterySingle' | 'BatteryTwin' | 'Welding'
+const GAUGES: Record<Family, string[]> = {
+  BatterySingle: ['0000','000','00','0','1','2','3','4','6','8','6mm'],
+  BatteryTwin:   ['0000','000','00','0','1','2','3','4','6','8','6mm'],
+  Welding:       ['0000','000','00','0','1','2','3','4','6','8']
 }
 
-/* -------------------------------------------------------
-   End options (shared interface so TS is happy)
-------------------------------------------------------- */
-type EndVariant = {
-  id: string
-  label: string
-  compat: readonly string[]
-  cost: number        // fallback only
-  assembly: number    // fallback only
-}
 type EndType = 'Lug' | 'Anderson' | 'BatteryClamp' | 'Bare'
-
+type EndVariant = { id: string; label: string; compat: readonly string[] }
 const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = {
   Lug: {
     label: 'Tinned Lug',
     variants: [
-      { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole', compat: ['8','6mm','6'], cost: 2.5, assembly: 4 },
-      { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3'],  cost: 3,   assembly: 4 },
-      { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3','2','1'],  cost: 3.5, assembly: 5 },
-      { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole',compat: ['1','0'],      cost: 4.2, assembly: 5 },
-      { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole',compat: ['0','00'],     cost: 5.1, assembly: 5.5 },
-      { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole',compat: ['00','000'],   cost: 6.2, assembly: 6 },
-      { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole',compat: ['000','0000'], cost: 7.4, assembly: 6.5 }
+      { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole', compat: ['8','6mm','6'] },
+      { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3']  },
+      { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3','2','1']  },
+      { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole',compat: ['1','0']      },
+      { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole',compat: ['0','00']     },
+      { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole',compat: ['00','000']   },
+      { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole',compat: ['000','0000'] }
     ]
   },
   Anderson: {
     label: 'Anderson SB',
     variants: [
-      { id: 'sb50',  label: 'SB50',  compat: ['8','6','4','3'], cost: 9.9,  assembly: 6 },
-      { id: 'sb120', label: 'SB120', compat: ['2','1','0'],     cost: 15.5, assembly: 6.5 },
-      { id: 'sb175', label: 'SB175', compat: ['0','00','000'],  cost: 19.9, assembly: 7 },
-      { id: 'sb350', label: 'SB350', compat: ['000','0000'],    cost: 29.9, assembly: 8 }
+      { id: 'sb50',  label: 'SB50',  compat: ['8','6','4','3'] },
+      { id: 'sb120', label: 'SB120', compat: ['2','1','0']     },
+      { id: 'sb175', label: 'SB175', compat: ['0','00','000']  },
+      { id: 'sb350', label: 'SB350', compat: ['000','0000']    }
     ]
   },
   BatteryClamp: {
     label: 'Battery Clamp',
     variants: [
-      { id: 'post-pos', label: 'Top Post (+)', compat: ['4','3','2','1','0'], cost: 7.2, assembly: 5 },
-      { id: 'post-neg', label: 'Top Post (−)', compat: ['4','3','2','1','0'], cost: 7.2, assembly: 5 }
+      { id: 'post-pos', label: 'Top Post (+)', compat: ['4','3','2','1','0'] },
+      { id: 'post-neg', label: 'Top Post (−)', compat: ['4','3','2','1','0'] }
     ]
   },
   Bare: {
     label: 'Bare End',
     variants: [
-      { id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm','8','6','4','3','2','1','0','00','000','0000'], cost: 0, assembly: 1.5 }
+      { id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm','8','6','4','3','2','1','0','00','000','0000'] }
     ]
   }
 }
 
-/* -------------------------------------------------------
-   State types
-------------------------------------------------------- */
-type Family = 'BatterySingle' | 'BatteryTwin' | 'Welding'
-type Gauge  = string
+type Gauge = string
 type EndChoice = { type: EndType | ''; variantId: string | '' }
+type PriceEntry = { price: number | null } // from /api/prices
 
-/* -------------------------------------------------------
-   Helpers
-------------------------------------------------------- */
-const cents   = (n:number)=>Math.round(n*100)
+const cents = (n:number)=>Math.round(n*100)
 const dollars = (c:number)=> (c/100).toFixed(2)
 
 /* Tiny SVG tiles */
@@ -97,9 +88,6 @@ const CableSVG = ({variant}:{variant:'single'|'welding'|'twin'}) => {
   )
 }
 
-/* =======================================================
-   Component
-======================================================= */
 export default function Builder(){
   const steps = ['Type','Gauge','Length','Ends','Extras','Review']
   const [step, setStep] = useState(0)
@@ -114,58 +102,81 @@ export default function Builder(){
   const [insulators, setInsulators] = useState<boolean>(false)
   const [labelA, setLabelA] = useState(''); const [labelB, setLabelB] = useState('')
 
-  const lengthCm = Math.round(lengthM*100)
-  const basePerM = BASE_PRICE_PER_M[family][gauge] ?? 0
+  // safe length
+  const safeLengthM = Number.isFinite(lengthM) && lengthM > 0 ? lengthM : 1.5
+  const lengthCm = Math.round(safeLengthM*100)
 
-  /* ---------- Live prices from Shopify (via /api/prices) ---------- */
-  type PriceEntry = { price: number; cost: number|null }
+  /* --------- Load current prices from Shopify (no fallbacks) --------- */
   const [prices, setPrices] = useState<Record<string, PriceEntry>>({})
+  const [priceLoading, setPriceLoading] = useState(false)
+  const [priceError, setPriceError] = useState<string | null>(null)
+
+  // Build the set of SKUs we need for the current config
+  function neededSkus(): string[] {
+    const set = new Set<string>()
+    set.add(`CABLE-${family}-${gauge}-CM`)
+    if (sleeve) set.add(`SLEEVE-${gauge}-CM`)
+    if (insulators) set.add('INSULATOR-LUG-BOOT')
+    if (endA.variantId) set.add(`END-${endA.variantId.toUpperCase()}`)
+    if (endB.variantId) set.add(`END-${endB.variantId.toUpperCase()}`)
+    // Preload all end SKUs so switching is instant (optional)
+    Object.values(END_OPTIONS).forEach(g => g.variants.forEach(v => set.add(`END-${v.id.toUpperCase()}`)))
+    // Always preload sleeve + insulator SKUs for the selected gauge
+    set.add(`SLEEVE-${gauge}-CM`)
+    set.add('INSULATOR-LUG-BOOT')
+    return Array.from(set)
+  }
 
   useEffect(() => {
-    // Gather the SKUs we might need for the current selection.
-    const skuSet = new Set<string>()
-    skuSet.add(`CABLE-${family}-${gauge}-CM`)
-    skuSet.add(`SLEEVE-${gauge}-CM`)
-    skuSet.add('INSULATOR-LUG-BOOT')
-    Object.values(END_OPTIONS).forEach(g => g.variants.forEach(v => skuSet.add(`END-${v.id.toUpperCase()}`)))
-
+    setPriceLoading(true)
+    setPriceError(null)
     fetch('/api/prices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skus: Array.from(skuSet) })
+      body: JSON.stringify({ skus: neededSkus() })
     })
-      .then(r => r.json())
-      .then(d => setPrices(d?.prices || {}))
-      .catch(() => {}) // silent: UI falls back to static numbers
-  }, [family, gauge])
+    .then(r => r.json())
+    .then((d) => {
+      if (d?.error) { setPriceError('Price service error'); setPrices({}); return }
+      setPrices(d?.prices || {})
+    })
+    .catch(() => setPriceError('Could not load prices'))
+    .finally(() => setPriceLoading(false))
+  }, [family, gauge, sleeve, insulators, endA.variantId, endB.variantId])
 
-  const getPrice = (sku: string, fallback: number) =>
-    prices[sku]?.price ?? fallback
+  // Helper: require a valid price; if missing, we’ll mark the config invalid
+  function requirePrice(sku: string): number | null {
+    const p = prices[sku]?.price
+    return (p == null || !Number.isFinite(p) || p <= 0) ? null : p
+  }
 
-  /* ---------- Current selection lookups ---------- */
+  /* ---------- Current selection ---------- */
   const endVarA  = endA.type ? END_OPTIONS[endA.type].variants.find(v=>v.id===endA.variantId) : undefined
   const endVarB  = endB.type ? END_OPTIONS[endB.type].variants.find(v=>v.id===endB.variantId) : undefined
-
-  /* ---------- Price math (uses Shopify where possible) ---------- */
-  // price per cm for cable (fallback to table /100)
-  const pricePerCm = getPrice(`CABLE-${family}-${gauge}-CM`, (basePerM || 0) / 100)
-  const baseCableCents = cents(pricePerCm * lengthCm * (pairMode ? 2 : 1))
-
-  // ends: use END-<ID> variant price
-  const endPriceA = endA.variantId ? getPrice(`END-${endA.variantId.toUpperCase()}`, (endVarA?.cost ?? 0) + (endVarA?.assembly ?? 0)) : 0
-  const endPriceB = endB.variantId ? getPrice(`END-${endB.variantId.toUpperCase()}`, (endVarB?.cost ?? 0) + (endVarB?.assembly ?? 0)) : 0
   const endUnits = (pairMode ? 2 : 1)
-  const endCostCents = cents(endPriceA * endUnits + endPriceB * endUnits)
 
-  // sleeving per cm
-  const sleevePerCm = getPrice(`SLEEVE-${gauge}-CM`, 0)
-  const sleeveCents = cents(sleeve ? sleevePerCm * lengthCm * (pairMode ? 2 : 1) : 0)
+  /* ---------- Compute price strictly from Shopify ---------- */
+  const missing: string[] = []
 
-  // insulators (2 for single, 4 for twin)
-  const insBoot = getPrice('INSULATOR-LUG-BOOT', 0)
-  const insulatorCents = cents(insulators ? insBoot * (pairMode ? 4 : 2) : 0)
+  const cablePerCm = requirePrice(`CABLE-${family}-${gauge}-CM`)
+  if (cablePerCm == null) missing.push(`CABLE-${family}-${gauge}-CM`)
+  const baseCableCents = cablePerCm != null ? cents(cablePerCm * lengthCm * (pairMode ? 2 : 1)) : 0
 
-  const subtotal = baseCableCents + endCostCents + sleeveCents + insulatorCents
+  const endPriceA = endA.variantId ? requirePrice(`END-${endA.variantId.toUpperCase()}`) : 0
+  if (endA.variantId && endPriceA == null) missing.push(`END-${endA.variantId.toUpperCase()}`)
+  const endPriceB = endB.variantId ? requirePrice(`END-${endB.variantId.toUpperCase()}`) : 0
+  if (endB.variantId && endPriceB == null) missing.push(`END-${endB.variantId.toUpperCase()}`)
+  const endCents = cents(((endPriceA || 0) + (endPriceB || 0)) * endUnits)
+
+  const sleevePerCm = sleeve ? requirePrice(`SLEEVE-${gauge}-CM`) : 0
+  if (sleeve && sleevePerCm == null) missing.push(`SLEEVE-${gauge}-CM`)
+  const sleeveCents = cents((sleevePerCm || 0) * lengthCm * (pairMode ? 2 : 1))
+
+  const insBoot = insulators ? requirePrice('INSULATOR-LUG-BOOT') : 0
+  if (insulators && insBoot == null) missing.push('INSULATOR-LUG-BOOT')
+  const insulatorCents = cents((insBoot || 0) * (pairMode ? 4 : 2))
+
+  const subtotal = baseCableCents + endCents + sleeveCents + insulatorCents
   const gst = Math.round(subtotal * 0.10)
   const total = subtotal + gst
 
@@ -187,7 +198,7 @@ export default function Builder(){
   function buildShopifyLineItems(){
     const items:any[] = []
     const sku = `CABLE-${family}-${gauge}-CM`
-    const props:any = { _family:family, _gauge:gauge, _length_m:lengthM.toFixed(2), _pair_mode: pairMode?'yes':'no', _label_a:labelA, _label_b:labelB }
+    const props:any = { _family:family, _gauge:gauge, _length_m:safeLengthM.toFixed(2), _pair_mode: pairMode?'yes':'no', _label_a:labelA, _label_b:labelB }
     if(pairMode){
       items.push({ sku, quantity: lengthCm, properties:{...props, _core:'red'} })
       items.push({ sku, quantity: lengthCm, properties:{...props, _core:'black'} })
@@ -210,8 +221,7 @@ export default function Builder(){
     })
     const { checkoutUrl, error } = await r.json()
     if (error) { alert(error); return }
-
-    // Break out of Shopify iframe to the top window (checkout won’t render inside an iframe)
+    // Break out of Shopify iframe
     const target = (typeof window !== 'undefined' && window.top) ? window.top : window
     target.location.href = checkoutUrl
   }
@@ -241,10 +251,10 @@ export default function Builder(){
     <div className="card">
       <div className="section-title">Gauge</div>
       <select value={gauge} onChange={e=>setGauge(e.target.value as Gauge)}>
-        {Object.keys(BASE_PRICE_PER_M[family]).map(g=><option key={g} value={g}>{g}</option>)}
+        {GAUGES[family].map(g=><option key={g} value={g}>{g}</option>)}
       </select>
       <div className="lede" style={{fontSize:14,marginTop:6}}>
-        Base (fallback): ${basePerM.toFixed(2)}/m ex GST
+        Prices are fetched live from Shopify for the selected gauge.
       </div>
     </div>
   )
@@ -335,7 +345,7 @@ export default function Builder(){
           <div className="lede" style={{fontSize:14}}>
             <div>Type: <strong>{family}</strong>{pairMode?' (pair)':''}</div>
             <div>Gauge: <strong>{gauge} B&S</strong></div>
-            <div>Length: <strong>{lengthM.toFixed(2)} m</strong> ({lengthCm} cm)</div>
+            <div>Length: <strong>{safeLengthM.toFixed(2)} m</strong> ({lengthCm} cm)</div>
             <div>Ends: <strong>{endVarA?.label || '—'}</strong> / <strong>{endVarB?.label || '—'}</strong></div>
             <div>Sleeving: <strong>{sleeve ? 'Full' : 'None'}</strong></div>
             <div>Insulators: <strong>{insulators ? 'Yes' : 'No'}</strong></div>
@@ -343,20 +353,33 @@ export default function Builder(){
         </div>
         <div className="card" style={{border:'1px dashed var(--line)'}}>
           <div className="section-title">Price</div>
-          <div className="price-row"><span>Base cable</span><span>${dollars(baseCableCents)}</span></div>
-          <div className="price-row"><span>Ends & assembly</span><span>${dollars(endCostCents)}</span></div>
-          <div className="price-row"><span>Sleeving</span><span>${dollars(sleeveCents)}</span></div>
-          <div className="price-row"><span>Insulators</span><span>${dollars(insulatorCents)}</span></div>
-          <div className="hr" />
-          <div className="price-row"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
-          <div className="price-row"><span>GST (10%)</span><span>${dollars(gst)}</span></div>
-          <div className="price-row" style={{fontSize:20}}><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
+          {priceLoading && <div className="lede">Loading live prices…</div>}
+          {!priceLoading && missing.length > 0 && (
+            <div className="lede" style={{color:'#b42318'}}>
+              Missing price for: {missing.join(', ')}<br/>
+              Check SKUs and variant prices in Shopify.
+            </div>
+          )}
+          {!priceLoading && missing.length === 0 && (
+            <>
+              <div className="price-row"><span>Base cable</span><span>${dollars(baseCableCents)}</span></div>
+              <div className="price-row"><span>Ends</span><span>${dollars(endCents)}</span></div>
+              <div className="price-row"><span>Sleeving</span><span>${dollars(sleeveCents)}</span></div>
+              <div className="price-row"><span>Insulators</span><span>${dollars(insulatorCents)}</span></div>
+              <div className="hr" />
+              <div className="price-row"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
+              <div className="price-row"><span>GST (10%)</span><span>${dollars(gst)}</span></div>
+              <div className="price-row" style={{fontSize:20}}><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
+            </>
+          )}
         </div>
       </div>
     </div>
   )
 
   const panels = [StepType, StepGauge, StepLength, StepEnds, StepExtras, StepReview]
+
+  const disableCheckout = priceLoading || missing.length > 0
 
   return (
     <div className="container">
@@ -372,18 +395,26 @@ export default function Builder(){
             <button className="btn" onClick={()=>setStep(s=>Math.max(0, s-1))} disabled={step===0}>Back</button>
             {step<steps.length-1
               ? <button className="btn btn-primary" onClick={()=>setStep(s=>Math.min(steps.length-1, s+1))}>Continue</button>
-              : <button className="btn btn-primary" onClick={addToCart}>Add to cart</button>}
+              : <button className="btn btn-primary" onClick={addToCart} disabled={disableCheckout}>
+                  {disableCheckout ? 'Prices not ready' : 'Add to cart'}
+                </button>}
           </div>
         </div>
 
         <aside className="card sticky">
           <div className="section-title">Totals</div>
-          <div className="price-row"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
-          <div className="price-row"><span>GST (10%)</span><span>${dollars(gst)}</span></div>
-          <div className="price-row" style={{fontSize:20}}><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
+          {priceLoading && <div className="lede">Loading live prices…</div>}
+          {!priceLoading && missing.length > 0 && <div className="lede" style={{color:'#b42318'}}>Missing price for: {missing.join(', ')}</div>}
+          {!priceLoading && missing.length === 0 && (
+            <>
+              <div className="price-row"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
+              <div className="price-row"><span>GST (10%)</span><span>${dollars(gst)}</span></div>
+              <div className="price-row" style={{fontSize:20}}><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
+            </>
+          )}
           <div className="hr" />
           <div className="lede" style={{fontSize:14}}>
-            {family}{pairMode?' (pair)':''} • {gauge} B&S • {lengthM.toFixed(2)} m
+            {family}{pairMode?' (pair)':''} • {gauge} B&S • {safeLengthM.toFixed(2)} m
           </div>
         </aside>
       </div>
