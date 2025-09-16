@@ -1,11 +1,11 @@
-/* Offgrid Doctor – minimal design system */
+/* Offgrid Doctor — crisp UI tokens */
 :root{
   --bg:#ffffff;
   --ink:#0b0d0c;
   --muted:#f6f7f8;
   --line:#e6e8eb;
   --accent:#FFD266;     /* brand gold */
-  --accent-ink:#1b1d1a; /* readable on gold */
+  --accent-ink:#1b1d1a;
   --brand:#0F2E1D;      /* deep green */
 }
 
@@ -14,57 +14,61 @@ html,body{margin:0;padding:0}
 body{
   color:var(--ink);
   background:var(--bg);
-  font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  font:16px/1.6 var(--font-inter), system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
 /* Layout */
-.container{max-width:1100px;margin:0 auto;padding:32px 20px}
-.h1{font-size:32px;font-weight:800;margin:0 0 16px}
-.subtle{color:#61646B}
-.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.container{max-width:1200px;margin:0 auto;padding:48px 24px}
+.h1{font-size:40px;font-weight:800;letter-spacing:-0.02em;margin:0 0 8px}
+.lede{font-size:18px;color:#61646B;margin:0 0 28px}
+.grid{display:grid;grid-template-columns:2fr 1fr;gap:20px}
 @media (max-width:980px){ .grid{grid-template-columns:1fr} }
 
-/* Cards & surfaces */
-.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 1px 0 rgba(16,24,40,.02)}
-.card + .card{margin-top:12px}
-.section-title{font-weight:700;margin:0 0 8px}
+/* Surface */
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 1px 0 rgba(16,24,40,.02)}
+.section-title{font-weight:800;margin:0 0 8px}
 
 /* Inputs */
-.input, select, input[type="number"], input[type="text"]{
-  width:100%;padding:10px 12px;border:1px solid var(--line);
-  border-radius:10px;background:#fff;outline:none;appearance:none;
+select, input[type="number"], input[type="text"]{
+  width:100%;padding:12px 14px;border:1px solid var(--line);
+  border-radius:12px;background:#fff;outline:none;appearance:none
 }
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:640px){ .row{grid-template-columns:1fr} }
-
-.check{display:flex;align-items:center;gap:8px;margin:6px 0}
+.check{display:flex;align-items:center;gap:10px;margin:8px 0}
 
 /* Buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;
-  font-weight:700;border-radius:999px;padding:12px 18px;border:1px solid var(--ink);background:#fff;cursor:pointer}
+.btn{display:inline-flex;align-items:center;justify-content:center;font-weight:800;
+  border-radius:999px;padding:12px 18px;border:1px solid var(--ink);background:#fff;cursor:pointer}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn-primary:hover{filter:brightness(.97)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* Sticky summary */
-.sticky{position:sticky;top:18px}
+.sticky{position:sticky;top:22px}
 
-/* Cable type tiles */
-.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+/* Tiles */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .tile{
-  border:1px solid var(--line);background:var(--muted);border-radius:14px;
-  padding:12px;cursor:pointer;transition:all .2s ease; text-align:center;
+  border:1px solid var(--line);background:var(--muted);border-radius:16px;padding:16px;cursor:pointer;
+  transition:transform .2s ease, box-shadow .2s ease; text-align:center
 }
 .tile:hover{transform:translateY(-1px)}
 .tile.selected{outline:2px solid var(--brand);background:#fff}
-.tile-label{font-size:14px;font-weight:600;margin-top:8px}
+.tile-label{font-size:14px;font-weight:700;margin-top:8px}
+
+/* Stepper */
+.stepper{display:flex;align-items:center;gap:12px;margin:4px 0 20px}
+.step{display:flex;align-items:center;gap:8px}
+.dot{width:26px;height:26px;border-radius:50%;background:#eaecef;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+.step.active .dot{background:var(--ink);color:#fff;border-color:var(--ink)}
+.step.done .dot{background:var(--brand);color:#fff;border-color:var(--brand)}
+.step-label{font-weight:700;color:#1c1f1d}
+.bar{flex:1;height:2px;background:var(--line)}
+.bar.filled{background:var(--brand)}
 
 /* Price */
 .price-row{display:flex;justify-content:space-between;margin:6px 0}
 .price-row strong{font-weight:800}
-
-/* Divider */
 .hr{height:1px;background:var(--line);margin:12px 0}
-
-/* Mini badge */
-.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef7f0;color:#245a37;font-weight:600;font-size:12px}
