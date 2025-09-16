@@ -188,4 +188,82 @@ export default function Builder(){
               <div>
                 <div className="subtle" style={{marginBottom:4}}>End A</div>
                 <select value={endA.type} onChange={e=>setEndA({ type: e.target.value as any, variantId: '' })}>
-                  <option value=""
+                  <option value="">— type —</option>
+                  {Object.entries(END_OPTIONS).map(([k,v])=>(<option key={k} value={k}>{v.label}</option>))}
+                </select>
+                {endA.type && (
+                  <select style={{marginTop:8}} value={endA.variantId} onChange={e=>setEndA(p=>({ ...p, variantId:e.target.value }))}>
+                    <option value="">— variant —</option>
+                    {END_OPTIONS[endA.type as keyof typeof END_OPTIONS].variants.map(v=>(
+                      <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge as any)}>
+                        {v.label}{!v.compat.includes(gauge as any) ? ' (incompatible)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {incompatible(endA.variantId) && <div className="subtle" style={{color:'#c33',marginTop:6}}>Incompatible with {gauge} B&S</div>}
+              </div>
+              <div>
+                <div className="subtle" style={{marginBottom:4}}>End B</div>
+                <select value={endB.type} onChange={e=>setEndB({ type: e.target.value as any, variantId: '' })}>
+                  <option value="">— type —</option>
+                  {Object.entries(END_OPTIONS).map(([k,v])=>(<option key={k} value={k}>{v.label}</option>))}
+                </select>
+                {endB.type && (
+                  <select style={{marginTop:8}} value={endB.variantId} onChange={e=>setEndB(p=>({ ...p, variantId:e.target.value }))}>
+                    <option value="">— variant —</option>
+                    {END_OPTIONS[endB.type as keyof typeof END_OPTIONS].variants.map(v=>(
+                      <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge as any)}>
+                        {v.label}{!v.compat.includes(gauge as any) ? ' (incompatible)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {incompatible(endB.variantId) && <div className="subtle" style={{color:'#c33',marginTop:6}}>Incompatible with {gauge} B&S</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* Protection & labels */}
+          <div className="card">
+            <div className="section-title">Extras</div>
+            <label className="check">
+              <input type="checkbox" checked={sleeve} onChange={e=>setSleeve(e.target.checked)} />
+              Add braided sleeving (full length)
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={insulators} onChange={e=>setInsulators(e.target.checked)} />
+              Add lug insulators (pair)
+            </label>
+            <div className="row" style={{marginTop:8}}>
+              <input className="input" placeholder="Label A" value={labelA} onChange={e=>setLabelA(e.target.value)} />
+              <input className="input" placeholder="Label B" value={labelB} onChange={e=>setLabelB(e.target.value)} />
+            </div>
+          </div>
+
+          <button className="btn btn-primary" onClick={addToCart}>Add to cart</button>
+        </div>
+
+        {/* RIGHT: sticky summary */}
+        <aside className="card sticky">
+          <div className="section-title">Totals</div>
+          <div className="price-row"><span>Base cable</span><span>${dollars(baseCableCents)}</span></div>
+          <div className="price-row"><span>Ends & assembly</span><span>${dollars(endCostCents)}</span></div>
+          <div className="price-row"><span>Sleeving</span><span>${dollars(sleeveCents)}</span></div>
+          <div className="price-row"><span>Insulators</span><span>${dollars(insulatorCents)}</span></div>
+          <div className="hr"></div>
+          <div className="price-row"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
+          <div className="price-row"><span>GST (10%)</span><span>${dollars(gst)}</span></div>
+          <div className="price-row" style={{fontSize:20}}><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
+
+          <div className="hr"></div>
+          <div className="subtle">
+            <div>Type: <strong>{family}</strong>{pairMode?' (pair)':''}</div>
+            <div>Gauge: <strong>{gauge} B&S</strong></div>
+            <div>Length: <strong>{lengthM.toFixed(2)} m</strong> ({lengthCm} cm)</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
+}
