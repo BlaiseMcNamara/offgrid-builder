@@ -113,42 +113,32 @@ export default function Builder(){
 
   // Build the set of SKUs we need for the current config
   function neededSkus(): string[] {
-    const set = new Set<string>()
-    set.add(`CABLE-${family}-${gauge}-CM`)
-    if (sleeve) set.add(`SLEEVE-${gauge}-CM`)
-    if (insulators) set.add('INSULATOR-LUG-BOOT')
-    if (endA.variantId) set.add(`END-${endA.variantId.toUpperCase()}`)
-    if (endB.variantId) set.add(`END-${endB.variantId.toUpperCase()}`)
-    // Preload all end SKUs so switching is instant (optional)
-    Object.values(END_OPTIONS).forEach(g => g.variants.forEach(v => set.add(`END-${v.id.toUpperCase()}`)))
-    // Always preload sleeve + insulator SKUs for the selected gauge
-    set.add(`SLEEVE-${gauge}-CM`)
-    set.add('INSULATOR-LUG-BOOT')
-    return Array.from(set)
-  }
+  const set = new Set<string>()
+  set.add(`CABLE-${family}-${gauge}-CM`)
+  if (endA.variantId) set.add(`END-${endA.variantId.toUpperCase()}`)
+  if (endB.variantId) set.add(`END-${endB.variantId.toUpperCase()}`)
+  if (sleeve) set.add(`SLEEVE-${gauge}-CM`)
+  if (insulators) set.add('INSULATOR-LUG-BOOT')
+  return Array.from(set)
+}
 
-  useEffect(() => {
-    setPriceLoading(true)
-    setPriceError(null)
-    fetch('/api/prices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skus: neededSkus() })
-    })
+useEffect(() => {
+  const ctrl = new AbortController()
+  setPriceLoading(true); setPriceError(null)
+  fetch('/api/prices', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ skus: neededSkus() }),
+    signal: ctrl.signal
+  })
     .then(r => r.json())
-    .then((d) => {
-      if (d?.error) { setPriceError('Price service error'); setPrices({}); return }
-      setPrices(d?.prices || {})
-    })
-    .catch(() => setPriceError('Could not load prices'))
+    .then(d => { if (d?.error) setPriceError('Price service error'); else setPrices(d?.prices || {}) })
+    .catch(e => { if (e.name !== 'AbortError') setPriceError('Could not load prices') })
     .finally(() => setPriceLoading(false))
-  }, [family, gauge, sleeve, insulators, endA.variantId, endB.variantId])
 
-  // Helper: require a valid price; if missing, we’ll mark the config invalid
-  function requirePrice(sku: string): number | null {
-    const p = prices[sku]?.price
-    return (p == null || !Number.isFinite(p) || p <= 0) ? null : p
-  }
+  return () => ctrl.abort()
+}, [family, gauge, sleeve, insulators, endA.variantId, endB.variantId])
+
 
   /* ---------- Current selection ---------- */
   const endVarA  = endA.type ? END_OPTIONS[endA.type].variants.find(v=>v.id===endA.variantId) : undefined
