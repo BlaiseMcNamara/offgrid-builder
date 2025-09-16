@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Stepper from './Stepper'
 
-/* -------------------------------------------------------
+/* --------------------------------------------------------
    We don't store any prices here. All prices come from
    Shopify via /api/prices using the SKUs we generate.
    The only static data below is:
