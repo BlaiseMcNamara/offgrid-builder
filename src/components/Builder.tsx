@@ -4,13 +4,13 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Stepper from './Stepper'
 
 /* -------------------------------------------------------
-   Configuration (data only — no prices here)
+   DATA (no prices here)
 ------------------------------------------------------- */
 type Family = 'BatterySingle' | 'BatteryTwin' | 'Welding'
 const GAUGES: Record<Family, string[]> = {
   BatterySingle: ['0000','000','00','0','1','2','3','4','6','8','6mm'],
   BatteryTwin:   ['0000','000','00','0','1','2','3','4','6','8','6mm'],
-  Welding:       ['95mm2','70mm2','50mm2','35mm2']
+  Welding:       ['95mm2','70mm2','50mm2','35mm2','0000','000','00','0','1','2','3','4','6','8'],
 }
 
 type EndType = 'Lug' | 'Anderson' | 'BatteryClamp' | 'Bare'
@@ -22,11 +22,11 @@ const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = 
       { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole', compat: ['8','6mm','6'] },
       { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3'] },
       { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3','2','1'] },
-      { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole',compat: ['1','0'] },
-      { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole',compat: ['0','00'] },
-      { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole',compat: ['00','000'] },
-      { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole',compat: ['000','0000'] }
-    ]
+      { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole', compat: ['1','0'] },
+      { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole', compat: ['0','00'] },
+      { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole', compat: ['00','000'] },
+      { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole', compat: ['000','0000'] },
+    ],
   },
   Anderson: {
     label: 'Anderson SB',
@@ -34,35 +34,42 @@ const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = 
       { id: 'sb50',  label: 'SB50',  compat: ['8','6','4','3'] },
       { id: 'sb120', label: 'SB120', compat: ['2','1','0'] },
       { id: 'sb175', label: 'SB175', compat: ['0','00','000'] },
-      { id: 'sb350', label: 'SB350', compat: ['000','0000'] }
-    ]
+      { id: 'sb350', label: 'SB350', compat: ['000','0000'] },
+    ],
   },
   BatteryClamp: {
     label: 'Battery Clamp',
     variants: [
       { id: 'post-pos', label: 'Top Post (+)', compat: ['4','3','2','1','0'] },
-      { id: 'post-neg', label: 'Top Post (−)', compat: ['4','3','2','1','0'] }
-    ]
+      { id: 'post-neg', label: 'Top Post (−)', compat: ['4','3','2','1','0'] },
+    ],
   },
   Bare: {
     label: 'Bare End',
     variants: [
-      { id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm','8','6','4','3','2','1','0','00','000','0000'] }
-    ]
-  }
+      { id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm','8','6','4','3','2','1','0','00','000','0000'] },
+    ],
+  },
+}
+
+/** Only show end types that make sense for each family */
+const ALLOWED_ENDS: Record<Family, EndType[]> = {
+  BatterySingle: ['Lug', 'Anderson', 'BatteryClamp', 'Bare'],
+  BatteryTwin:   ['Lug', 'Anderson', 'Bare'],   // no clamps for twin by default
+  Welding:       ['Lug', 'Anderson', 'Bare'],   // clamps removed for welding leads
 }
 
 /* -------------------------------------------------------
-   Types & helpers
+   TYPES & HELPERS
 ------------------------------------------------------- */
 type Gauge = string
 type EndChoice = { type: EndType | ''; variantId: string | '' }
 type PriceEntry = { price: number | null }
 
-const cents = (n:number)=>Math.round(n*100)
+const cents   = (n:number)=>Math.round(n*100)
 const dollars = (c:number)=> (c/100).toFixed(2)
 
-/* Small, crisp SVG tiles */
+/* Tiny SVGs for tiles */
 const CableSVG = ({variant}:{variant:'single'|'welding'|'twin'}) => {
   if (variant === 'twin') return (
     <svg viewBox="0 0 220 80" width="100%" height="80" aria-hidden>
@@ -98,16 +105,22 @@ function getLocalPrice(sku: string): number | null | undefined {
 function setLocalPrice(sku: string, price: number | null) {
   try { localStorage.setItem('price:'+sku, JSON.stringify({ price, exp: Date.now()+TTL })) } catch {}
 }
+function isCompat(variantId?: string, g?: string){
+  if (!variantId || !g) return false
+  const all = Object.values(END_OPTIONS).flatMap(o => o.variants)
+  const v = all.find(x => x.id === variantId)
+  return !!v && v.compat.includes(g)
+}
 
 /* =======================================================
-   Component
+   COMPONENT
 ======================================================= */
 export default function Builder(){
   const steps = ['Type','Gauge','Length','Ends','Extras','Review']
   const [step, setStep] = useState(0)
 
-  const [family, setFamily] = useState<Family>('BatterySingle')
-  const [gauge, setGauge]   = useState<Gauge>('4')
+  const [family, setFamily]   = useState<Family>('BatterySingle')
+  const [gauge, setGauge]     = useState<Gauge>('4')
   const [lengthM, setLengthM] = useState<number>(1.5)
   const [pairMode, setPairMode] = useState<boolean>(false)
   const [endA, setEndA] = useState<EndChoice>({ type:'', variantId:'' })
@@ -115,12 +128,13 @@ export default function Builder(){
   const [sleeve, setSleeve] = useState<boolean>(false)
   const [insulators, setInsulators] = useState<boolean>(false)
   const [labelA, setLabelA] = useState(''); const [labelB, setLabelB] = useState('')
+  const [activeSide, setActiveSide] = useState<'A'|'B'>('A')
 
   const safeLengthM = Number.isFinite(lengthM) && lengthM > 0 ? lengthM : 1.5
   const lengthCm = Math.round(safeLengthM*100)
   const endUnits = (pairMode ? 2 : 1)
 
-  /* --------- Live prices (Shopify only) --------- */
+  /* -------- Live prices (Shopify only) -------- */
   const [prices, setPrices] = useState<Record<string, PriceEntry>>({})
   const [priceLoading, setPriceLoading] = useState(false)
   const [priceError, setPriceError] = useState<string | null>(null)
@@ -139,7 +153,6 @@ export default function Builder(){
     const ctrl = new AbortController()
     const all = neededSkus()
 
-    // pull any cached values first for instant UI
     const pre: Record<string, PriceEntry> = {}
     const missing: string[] = []
     for (const sku of all) {
@@ -175,6 +188,15 @@ export default function Builder(){
     return (p == null || !Number.isFinite(p) || p <= 0) ? null : p
   }
 
+  /* Clear ends if family/gauge change makes them invalid */
+  useEffect(() => {
+    if (endA.type && !ALLOWED_ENDS[family].includes(endA.type)) setEndA({ type:'', variantId:'' })
+    if (endB.type && !ALLOWED_ENDS[family].includes(endB.type)) setEndB({ type:'', variantId:'' })
+    if (endA.variantId && !isCompat(endA.variantId, gauge)) setEndA(p => ({ ...p, variantId:'' }))
+    if (endB.variantId && !isCompat(endB.variantId, gauge)) setEndB(p => ({ ...p, variantId:'' }))
+  }, [family, gauge]) // eslint-disable-line
+
+  /* ---- Price math ---- */
   const endVarA  = endA.type ? END_OPTIONS[endA.type].variants.find(v=>v.id===endA.variantId) : undefined
   const endVarB  = endB.type ? END_OPTIONS[endB.type].variants.find(v=>v.id===endB.variantId) : undefined
 
@@ -202,14 +224,7 @@ export default function Builder(){
   const gst = Math.round(subtotal * 0.10)
   const total = subtotal + gst
 
-  function incompatible(variantId?: string){
-    if(!variantId) return false
-    const all: EndVariant[] = Object.values(END_OPTIONS).flatMap(o => o.variants)
-    const v = all.find(x => x.id === variantId)
-    if(!v) return false
-    return !v.compat.includes(gauge)
-  }
-
+  /* ---- Build cart + checkout ---- */
   function buildShopifyLineItems(){
     const items:any[] = []
     const sku = `CABLE-${family}-${gauge}-CM`
@@ -240,8 +255,7 @@ export default function Builder(){
     target.location.href = checkoutUrl
   }
 
-  /* ---------- UI blocks (V2 style) ---------- */
-
+  /* ---------- UI blocks ---------- */
   const familyTiles = useMemo(() => ([
     { key:'BatterySingle', label:'Battery — Single Core', svg:<CableSVG variant="single" /> },
     { key:'Welding',       label:'Welding Cable',          svg:<CableSVG variant="welding" /> },
@@ -312,44 +326,54 @@ export default function Builder(){
         <div className="card-sub">Choose terminations for each end.</div>
       </header>
 
-      <div className="ends-grid">
-        <div className="end-col">
-          <div className="end-h">End A</div>
-          <select className="select v2" value={endA.type} onChange={e=>setEndA({ type: e.target.value as EndType, variantId: '' })}>
-            <option value="">— type —</option>
-            {Object.entries(END_OPTIONS).map(([k,v])=>(<option key={k} value={k}>{v.label}</option>))}
-          </select>
-          {endA.type && (
-            <select className="select v2" style={{marginTop:8}} value={endA.variantId} onChange={e=>setEndA(p=>({ ...p, variantId:e.target.value }))}>
-              <option value="">— variant —</option>
-              {END_OPTIONS[endA.type as EndType].variants.map(v=>(
-                <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge)}>
-                  {v.label}{!v.compat.includes(gauge) ? ' (incompatible)' : ''}
-                </option>
-              ))}
-            </select>
-          )}
-          {incompatible(endA.variantId) && <div className="warn">Incompatible with {gauge} B&S</div>}
-        </div>
+      {/* Left / Right segmented control */}
+      <div className="seg">
+        <button type="button" className={activeSide==='A' ? 'on' : ''} onClick={()=>setActiveSide('A')}>Left</button>
+        <button type="button" className={activeSide==='B' ? 'on' : ''} onClick={()=>setActiveSide('B')}>Right</button>
+      </div>
 
-        <div className="end-col">
-          <div className="end-h">End B</div>
-          <select className="select v2" value={endB.type} onChange={e=>setEndB({ type: e.target.value as EndType, variantId: '' })}>
-            <option value="">— type —</option>
-            {Object.entries(END_OPTIONS).map(([k,v])=>(<option key={k} value={k}>{v.label}</option>))}
-          </select>
-          {endB.type && (
-            <select className="select v2" style={{marginTop:8}} value={endB.variantId} onChange={e=>setEndB(p=>({ ...p, variantId:e.target.value }))}>
-              <option value="">— variant —</option>
-              {END_OPTIONS[endB.type as EndType].variants.map(v=>(
-                <option key={v.id} value={v.id} disabled={!v.compat.includes(gauge)}>
-                  {v.label}{!v.compat.includes(gauge) ? ' (incompatible)' : ''}
-                </option>
-              ))}
-            </select>
-          )}
-          {incompatible(endB.variantId) && <div className="warn">Incompatible with {gauge} B&S</div>}
-        </div>
+      {/* Show only end types that are allowed & have at least one compatible variant */}
+      {ALLOWED_ENDS[family]
+        .map((t) => {
+          const vars = END_OPTIONS[t].variants.filter(v => v.compat.includes(gauge))
+          return { type: t, label: END_OPTIONS[t].label, vars }
+        })
+        .filter(group => group.vars.length > 0)
+        .map(group => (
+          <div className="end-group" key={group.type}>
+            <div className="end-type">{group.label}</div>
+            <div className="chips">
+              {group.vars.map(v => {
+                const sel = (activeSide==='A' && endA.variantId===v.id) || (activeSide==='B' && endB.variantId===v.id)
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={`chip ${sel?'sel':''}`}
+                    onClick={() => {
+                      const payload = { type: group.type as EndType, variantId: v.id }
+                      if (activeSide==='A') setEndA(payload); else setEndB(payload)
+                    }}
+                    title={v.label}
+                  >
+                    {v.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))
+      }
+
+      {/* Clear for the active side */}
+      <div className="clear-row">
+        <button
+          type="button"
+          className="chip ghost"
+          onClick={() => activeSide==='A' ? setEndA({ type:'', variantId:'' }) : setEndB({ type:'', variantId:'' })}
+        >
+          No termination
+        </button>
       </div>
     </section>
   )
@@ -470,6 +494,29 @@ export default function Builder(){
           </div>
         </aside>
       </main>
+
+      {/* Minimal styles for the new Left/Right chips so you don't have to touch globals */}
+      <style jsx>{`
+        .seg{
+          display:inline-flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:12px;
+        }
+        .seg button{
+          background:var(--muted); color:var(--text); border:0; padding:8px 14px; font-weight:600; cursor:pointer;
+        }
+        .seg button + button{ border-left:1px solid var(--line); }
+        .seg button.on{ background:linear-gradient(180deg,#5b8cff,#3a64ff); color:#fff; }
+
+        .end-group{ margin:12px 0; }
+        .end-type{ font-size:13px; color:var(--sub); margin:6px 0; }
+        .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+        .chip{
+          border:1px solid var(--line); background:var(--muted); color:var(--text);
+          border-radius:999px; padding:8px 12px; font-size:13px; cursor:pointer;
+        }
+        .chip.sel{ border-color:#4468ff; box-shadow:0 0 0 2px rgba(68,104,255,.25) inset; }
+        .chip.ghost{ opacity:.8; }
+        .clear-row{ margin-top:8px; }
+      `}</style>
     </div>
   )
 }
