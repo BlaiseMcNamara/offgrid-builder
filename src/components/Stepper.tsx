@@ -1,20 +1,35 @@
 'use client'
-type Props = { steps: string[]; current: number; onGo?: (i:number)=>void }
-export default function Stepper({ steps, current, onGo }: Props){
+
+import React from 'react'
+
+export default function Stepper({
+  steps,
+  current,
+  onGo
+}: {
+  steps: string[]
+  current: number
+  onGo: (n:number)=>void
+}) {
+  const pct = (current/(steps.length-1))*100
   return (
-    <div className="stepper">
-      {steps.map((s, i) => (
-        <div key={s} className={`step ${i<current?'done': i===current?'active':''}`}>
+    <div className="stepper v2" role="navigation" aria-label="Steps">
+      <div className="bar">
+        <div className="bar-fill" style={{width:`${pct}%`}} />
+      </div>
+      <div className="dots">
+        {steps.map((s, i) => (
           <button
+            key={s}
             type="button"
-            className="dot"
+            className={`dot ${i===current?'active':''} ${i<current?'done':''}`}
+            onClick={()=>onGo(i)}
+            aria-current={i===current}
             aria-label={`Step ${i+1}: ${s}`}
-            onClick={() => onGo?.(i)}
-          >{i+1}</button>
-          <div className="step-label" style={{opacity:i<=current?1:.5}}>{s}</div>
-          {i<steps.length-1 && <div className={`bar ${i<current?'filled':''}`} />}
-        </div>
-      ))}
+            title={s}
+          />
+        ))}
+      </div>
     </div>
   )
 }
