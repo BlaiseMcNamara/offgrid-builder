@@ -2,9 +2,9 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 
-/* =======================================================
-   INLINE STEPPER (self-contained)
-======================================================= */
+/* ------------------------------------------------------------------
+   Mini Stepper (inline so this file is 100% drop-in)
+-------------------------------------------------------------------*/
 function Stepper({
   steps,
   current,
@@ -12,675 +12,845 @@ function Stepper({
 }: {
   steps: string[];
   current: number;
-  onGo: (i: number) => void;
+  onGo: (n: number) => void;
 }) {
   return (
-    <ol className="steps" role="tablist" aria-label="Builder steps">
-      {steps.map((t, i) => (
-        <li key={t}>
-          <button
-            type="button"
-            className={`step ${i === current ? 'cur' : i < current ? 'done' : ''}`}
-            onClick={() => onGo(i)}
-            aria-current={i === current ? 'step' : undefined}
-          >
-            <span className="idx">{i + 1}</span>
-            <span className="lbl">{t}</span>
-          </button>
-        </li>
+    <div className="stepper">
+      {steps.map((s, i) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onGo(i)}
+          className={`step ${i === current ? 'active' : ''} ${
+            i < current ? 'done' : ''
+          }`}
+        >
+          <span className="stepNum">{i + 1}</span>
+          <span>{s}</span>
+        </button>
       ))}
-    </ol>
+      <style jsx>{`
+        .stepper {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .step {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--text);
+          font-weight: 500;
+        }
+        .step.active {
+          border-color: #111;
+          background: #111;
+          color: #fff;
+        }
+        .step.done {
+          border-color: #1112;
+        }
+        .stepNum {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: #111;
+          color: #fff;
+          font-size: 12px;
+        }
+        .step.active .stepNum {
+          background: #fff;
+          color: #111;
+        }
+      `}</style>
+    </div>
   );
 }
 
-/* =======================================================
-   DATA
-======================================================= */
+/* ------------------------------------------------------------------
+   Pricing + End options
+-------------------------------------------------------------------*/
 type Family = 'BatterySingle' | 'BatteryTwin' | 'Welding';
-const GAUGES: Record<Family, string[]> = {
-  BatterySingle: ['0000','000','00','0','1','2','3','4','6','8','6mm'],
-  BatteryTwin:   ['0000','000','00','0','1','2','3','4','6','8','6mm'],
-  Welding:       ['95mm2','70mm2','50mm2','35mm2','0000','000','00','0','1','2','3','4','6','8'],
-};
+type Gauge = string;
 
+type EndVariant = {
+  id: string;
+  label: string;
+  compat: readonly string[]; // supported gauges
+};
 type EndType = 'Lug' | 'Anderson' | 'BatteryClamp' | 'Bare';
-type EndVariant = { id: string; label: string; compat: readonly string[] };
+type EndChoice = { type: EndType | ''; variantId: string | '' };
 
 const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = {
   Lug: {
     label: 'Tinned Lug',
     variants: [
-      { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole',  compat: ['8','6mm','6'] },
-      { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3'] },
-      { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3','2','1'] },
-      { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole',compat: ['1','0'] },
-      { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole',compat: ['0','00'] },
-      { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole',compat: ['00','000'] },
-      { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole',compat: ['000','0000'] },
+      { id: 'lug-6mm-6hole', label: '6mm² • 6mm hole', compat: ['8', '6mm', '6'] },
+      { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6', '4', '3'] },
+      { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3', '2', '1'] },
+      { id: 'lug-35mm-10hole', label: '35mm² • 10mm hole', compat: ['1', '0'] },
+      { id: 'lug-50mm-10hole', label: '50mm² • 10mm hole', compat: ['0', '00'] },
+      { id: 'lug-70mm-10hole', label: '70mm² • 10mm hole', compat: ['00', '000'] },
+      { id: 'lug-95mm-12hole', label: '95mm² • 12mm hole', compat: ['000', '0000'] },
     ],
   },
   Anderson: {
     label: 'Anderson SB',
     variants: [
-      { id: 'sb50',  label: 'SB50',  compat: ['8','6','4','3'] },
-      { id: 'sb120', label: 'SB120', compat: ['2','1','0'] },
-      { id: 'sb175', label: 'SB175', compat: ['0','00','000'] },
-      { id: 'sb350', label: 'SB350', compat: ['000','0000'] },
+      { id: 'sb50', label: 'SB50', compat: ['8', '6', '4', '3'] },
+      { id: 'sb120', label: 'SB120', compat: ['2', '1', '0'] },
+      { id: 'sb175', label: 'SB175', compat: ['0', '00', '000'] },
+      { id: 'sb350', label: 'SB350', compat: ['000', '0000'] },
     ],
   },
   BatteryClamp: {
     label: 'Battery Clamp',
     variants: [
-      { id: 'post-pos', label: 'Top Post (+)', compat: ['4','3','2','1','0'] },
-      { id: 'post-neg', label: 'Top Post (−)', compat: ['4','3','2','1','0'] },
+      { id: 'post-pos', label: 'Top Post (+)', compat: ['4', '3', '2', '1', '0'] },
+      { id: 'post-neg', label: 'Top Post (−)', compat: ['4', '3', '2', '1', '0'] },
     ],
   },
   Bare: {
     label: 'Bare End',
-    variants: [
-      { id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm','8','6','4','3','2','1','0','00','000','0000'] },
-    ],
+    variants: [{ id: 'bare', label: 'Bare (with heat-shrink)', compat: ['6mm', '8', '6', '4', '3', '2', '1', '0', '00', '000', '0000'] }],
   },
 };
 
-/** What end types make sense per family */
-const ALLOWED_ENDS: Record<Family, EndType[]> = {
-  BatterySingle: ['Lug','Anderson','BatteryClamp','Bare'],
-  BatteryTwin:   ['Lug','Anderson','Bare'],
-  Welding:       ['Lug','Anderson','Bare'],
-};
+// pretty money helpers
+const cents = (n: number) => Math.round(n * 100);
+const dollars = (c: number) => (c / 100).toFixed(2);
 
-/* =======================================================
-   HELPERS
-======================================================= */
-type Gauge = string;
-type EndChoice = { type: EndType | ''; variantId: string | '' };
-type PriceEntry = { price: number | null };
-
-const cents   = (n:number)=>Math.round(n*100);
-const dollars = (c:number)=> (c/100).toFixed(2);
-
-const TTL = 5 * 60 * 1000; // 5 mins
-function getLocalPrice(sku: string): number | null | undefined {
-  try {
-    const obj = JSON.parse(localStorage.getItem('price:'+sku) || 'null');
-    if (!obj) return undefined;
-    if (obj.exp < Date.now()) { localStorage.removeItem('price:'+sku); return undefined; }
-    return obj.price as number | null;
-  } catch { return undefined; }
-}
-function setLocalPrice(sku: string, price: number | null) {
-  try { localStorage.setItem('price:'+sku, JSON.stringify({ price, exp: Date.now()+TTL })) } catch {}
-}
-function isCompat(variantId?: string, g?: string){
-  if (!variantId || !g) return false;
-  const all = Object.values(END_OPTIONS).flatMap(o => o.variants);
-  const v = all.find(x => x.id === variantId);
-  return !!v && v.compat.includes(g);
-}
-
-/* =======================================================
-   SVG CABLE PREVIEW
-======================================================= */
-function LugEnd({side,label}:{side:'left'|'right',label?:string}) {
+/* ------------------------------------------------------------------
+   Simple SVGs for the cable + end preview
+-------------------------------------------------------------------*/
+function EndIcon({ type }: { type: EndType | '' }) {
+  // neutral end icons (just for buttons)
+  if (type === 'Bare' || type === '') {
+    return (
+      <svg width="28" height="28" viewBox="0 0 40 40">
+        <rect x="8" y="12" rx="3" ry="3" width="24" height="16" fill="#dcdfe3" />
+        <rect x="14" y="12" width="2" height="16" fill="#c8ccd1" />
+      </svg>
+    );
+  }
+  // generic lug-ish icon
   return (
-    <g transform={side==='left' ? 'translate(120,0)' : 'translate(1080,0) scale(-1,1)'} aria-label={`Lug ${side}`}>
-      <rect x="0" y="34" width="46" height="32" rx="4" fill="#d8dadd" stroke="#c9ccd1"/>
-      <circle cx="18" cy="50" r="7" fill="#ffffff" stroke="#c9ccd1"/>
-      <rect x="44" y="36" width="24" height="28" rx="6" fill="#c9ccd1"/>
-      <rect x="66" y="38" width="30" height="24" rx="6" fill="#aeb3ba"/>
-      {label ? <text x="12" y="30" fontSize="10" fill="#7b8088">{label}</text> : null}
-    </g>
-  );
-}
-function AndersonEnd({side,size}:{side:'left'|'right',size:'50'|'120'|'175'|'350'}) {
-  const color = '#bfc6ce';
-  return (
-    <g transform={side==='left' ? 'translate(116,0)' : 'translate(1084,0) scale(-1,1)'} aria-label={`Anderson SB${size} ${side}`}>
-      <rect x="0" y="30" width="60" height="40" rx="6" fill={color} stroke="#aeb5be"/>
-      <rect x="8" y="38" width="18" height="14" rx="2" fill="#88909a"/>
-      <rect x="34" y="38" width="18" height="14" rx="2" fill="#88909a"/>
-      <text x="30" y="28" fontSize="10" textAnchor="middle" fill="#7b8088">SB{size}</text>
-    </g>
-  );
-}
-function ClampEnd({side,pol}:{side:'left'|'right',pol:'+'|'-'}) {
-  return (
-    <g transform={side==='left' ? 'translate(108,0)' : 'translate(1092,0) scale(-1,1)'} aria-label={`Battery clamp ${pol} ${side}`}>
-      <rect x="0" y="32" width="70" height="36" rx="6" fill="#d8dadd" stroke="#c9ccd1"/>
-      <circle cx="22" cy="50" r="8" fill="#b8bec6"/>
-      <text x="52" y="52" fontSize="14" fill="#8b9097" textAnchor="middle">{pol}</text>
-    </g>
-  );
-}
-function BareEnd({side}:{side:'left'|'right'}) {
-  return (
-    <g transform={side==='left' ? 'translate(140,0)' : 'translate(1060,0) scale(-1,1)'} aria-label={`Bare ${side}`}>
-      <rect x="0" y="40" width="28" height="16" rx="8" fill="#aeb3ba"/>
-    </g>
+    <svg width="28" height="28" viewBox="0 0 40 40">
+      <rect x="12" y="13" rx="2" ry="2" width="16" height="14" fill="#dcdfe3" />
+      <circle cx="20" cy="16" r="3" fill="#c8ccd1" />
+    </svg>
   );
 }
 
 function CablePreview({
-  gauge,
-  endLeft,
-  endRight,
-  pulseSide,
-}:{
-  gauge: string;
-  endLeft: { type?: EndType, variantId?: string };
-  endRight: { type?: EndType, variantId?: string };
-  pulseSide: 'A'|'B'|null;
+  left,
+  right,
+}: {
+  left: EndType | '';
+  right: EndType | '';
 }) {
-  const renderEnd = (side:'left'|'right', variantId?: string, type?: EndType) => {
-    if (!variantId || !type) return <BareEnd side={side} />;
-    if (type === 'Lug') return <LugEnd side={side} label={gauge} />;
-    if (type === 'Anderson') {
-      const size = variantId.toUpperCase().includes('350') ? '350'
-        : variantId.toUpperCase().includes('175') ? '175'
-        : variantId.toUpperCase().includes('120') ? '120' : '50';
-      return <AndersonEnd side={side} size={size as any} />;
-    }
-    if (type === 'BatteryClamp') return <ClampEnd side={side} pol={variantId==='post-pos' ? '+' : '-'} />;
-    return <BareEnd side={side} />;
-  };
-
   return (
     <div className="preview">
-      <svg viewBox="0 0 1200 120" width="100%" height="120" role="img" aria-label="Cable preview">
-        {/* copper */}
-        <rect x="156" y="54" width="60" height="12" rx="6" fill="#c77d49"/>
-        <rect x="984" y="54" width="60" height="12" rx="6" fill="#c77d49"/>
-        {/* jacket */}
+      <svg viewBox="0 0 1200 160" width="100%" height="160">
+        {/* left end */}
+        {left ? (
+          <>
+            <rect x="70" y="52" width="38" height="56" rx="6" fill="#d9dde2" />
+            <circle cx="89" cy="80" r="9" fill="#c9ced4" />
+          </>
+        ) : (
+          <>
+            <rect x="70" y="62" width="36" height="36" rx="6" fill="#d9dde2" />
+          </>
+        )}
+        {/* ferrule-ish adapter */}
+        <rect x="110" y="60" width="32" height="40" rx="4" fill="#cfd3d8" />
+
+        {/* cable body */}
+        <rect x="142" y="60" width="916" height="40" rx="18" fill="url(#g)" />
         <defs>
-          <linearGradient id="cableGrad" x1="0" x2="1">
-            <stop offset="0" stopColor="#35383c"/><stop offset="1" stopColor="#26292c"/>
+          <linearGradient id="g" x1="0" x2="1">
+            <stop offset="0" stopColor="#3c3f43" />
+            <stop offset="1" stopColor="#2a2d30" />
           </linearGradient>
         </defs>
-        <rect x="210" y="46" width="780" height="28" rx="14" fill="url(#cableGrad)"/>
 
-        {/* ends */}
-        <g className={`end end-left ${pulseSide==='A' ? 'pulse' : ''}`}>{renderEnd('left', endLeft.variantId, endLeft.type)}</g>
-        <g className={`end end-right ${pulseSide==='B' ? 'pulse' : ''}`}>{renderEnd('right', endRight.variantId, endRight.type)}</g>
+        {/* right adapter + end */}
+        <rect x="1058" y="60" width="32" height="40" rx="4" fill="#cfd3d8" />
+        {right ? (
+          <>
+            <rect x="1090" y="52" width="38" height="56" rx="6" fill="#d9dde2" />
+            <circle cx="1109" cy="80" r="9" fill="#c9ced4" />
+          </>
+        ) : (
+          <>
+            <rect x="1092" y="62" width="36" height="36" rx="6" fill="#d9dde2" />
+          </>
+        )}
       </svg>
+
+      <style jsx>{`
+        .preview {
+          border: 1px solid var(--line);
+          border-radius: 16px;
+          background: #fff;
+        }
+      `}</style>
     </div>
   );
 }
 
-/* =======================================================
-   COMPONENT
-======================================================= */
+/* ------------------------------------------------------------------
+   MAIN COMPONENT
+-------------------------------------------------------------------*/
 export default function Builder() {
-  const UI_VERSION = 'UI v3.0 (light)';
-
-  const steps = ['Type','Gauge','Length','Ends','Extras','Review'];
+  const steps = ['Type', 'Gauge', 'Length', 'Ends', 'Extras', 'Review'];
   const [step, setStep] = useState(0);
 
-  const [family, setFamily]   = useState<Family>('BatterySingle');
-  const [gauge, setGauge]     = useState<Gauge>('4');
+  const [family, setFamily] = useState<Family>('BatterySingle');
+  const [gauge, setGauge] = useState<Gauge>('4');
   const [lengthM, setLengthM] = useState<number>(1.5);
   const [pairMode, setPairMode] = useState<boolean>(false);
-  const [endA, setEndA] = useState<EndChoice>({ type:'', variantId:'' });
-  const [endB, setEndB] = useState<EndChoice>({ type:'', variantId:'' });
+
+  const [endA, setEndA] = useState<EndChoice>({ type: '', variantId: '' });
+  const [endB, setEndB] = useState<EndChoice>({ type: '', variantId: '' });
+  const [whichEnd, setWhichEnd] = useState<'A' | 'B'>('A');
+
   const [sleeve, setSleeve] = useState<boolean>(false);
   const [insulators, setInsulators] = useState<boolean>(false);
-  const [labelA, setLabelA] = useState(''); const [labelB, setLabelB] = useState('');
-  const [activeSide, setActiveSide] = useState<'A'|'B'>('A');
-  const [pulseSide, setPulseSide] = useState<'A'|'B'|null>(null);
+  const [labelA, setLabelA] = useState('');
+  const [labelB, setLabelB] = useState('');
 
-  // prices
-  const [prices, setPrices] = useState<Record<string, PriceEntry>>({});
-  const [priceLoading, setPriceLoading] = useState(false);
+  const lengthCm = Math.round(lengthM * 100);
 
-  const safeLengthM = Number.isFinite(lengthM) && lengthM > 0 ? lengthM : 1.5;
-  const lengthCm = Math.round(safeLengthM*100);
-  const endUnits = (pairMode ? 2 : 1);
+  /* --------------------------------------------------------------
+     Pricing via Shopify (live)
+  -------------------------------------------------------------- */
+  const [priceCache, setPriceCache] = useState<Record<string, number | null>>({});
+  const [loadingPrices, setLoadingPrices] = useState(false);
 
-  // PRICE FETCH (cached + /api/prices)
-  function neededSkus(): string[] {
-    const set = new Set<string>();
-    set.add(`CABLE-${family}-${gauge}-CM`);
-    if (endA.variantId) set.add(`END-${endA.variantId.toUpperCase()}`);
-    if (endB.variantId) set.add(`END-${endB.variantId.toUpperCase()}`);
-    if (sleeve) set.add(`SLEEVE-${gauge}-CM`);
-    if (insulators) set.add('INSULATOR-LUG-BOOT');
-    return Array.from(set);
-  }
-  useEffect(() => {
-    const ctrl = new AbortController();
-    const all = neededSkus();
-    const pre: Record<string, PriceEntry> = {};
-    const missing: string[] = [];
-    for (const sku of all) {
-      const p = getLocalPrice(sku);
-      if (p !== undefined) pre[sku] = { price: p };
-      else missing.push(sku);
+  // Build all SKUs we might need
+  const allEndSkus = useMemo(() => {
+    const ids = Object.values(END_OPTIONS).flatMap((g) => g.variants.map((v) => v.id));
+    return ids.map((id) => `END-${id.toUpperCase()}`);
+  }, []);
+
+  const baseSku = `CABLE-${family}-${gauge}-CM`;
+  const sleeveSku = `SLEEVE-${gauge}-CM`;
+  const insSku = 'INSULATOR-LUG-BOOT';
+
+  async function fetchPrices(skus: string[], { debug = false } = {}) {
+    setLoadingPrices(true);
+    try {
+      const r = await fetch('/api/prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skus, debug }),
+      });
+      const j = (await r.json()) as {
+        prices: Record<string, { price: number | null }>;
+      };
+      const updated: Record<string, number | null> = { ...priceCache };
+      for (const [sku, v] of Object.entries(j.prices)) updated[sku] = v?.price ?? null;
+      setPriceCache(updated);
+    } catch (e) {
+      // swallow; UI will show missing price notes
+    } finally {
+      setLoadingPrices(false);
     }
-    if (Object.keys(pre).length) setPrices(prev => ({ ...pre, ...prev }));
-    if (!missing.length) return;
-
-    setPriceLoading(true);
-    fetch('/api/prices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skus: missing }),
-      signal: ctrl.signal
-    })
-      .then(r => r.json())
-      .then((d: any) => {
-        const map = d?.prices || {};
-        for (const [sku, v] of Object.entries(map) as [string, any][]) {
-          setLocalPrice(sku, v?.price ?? null);
-        }
-        setPrices(prev => ({ ...prev, ...map }));
-      })
-      .finally(() => setPriceLoading(false));
-    return () => ctrl.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family, gauge, sleeve, insulators, endA.variantId, endB.variantId]);
-
-  function requirePrice(sku: string): number | null {
-    const p = prices[sku]?.price;
-    return (p == null || !Number.isFinite(p) || p <= 0) ? null : p;
   }
 
-  // Auto-clear invalid on family/gauge change
+  // Pull base + sleeve + ALL ends once per (family,gauge) change
   useEffect(() => {
-    if (endA.type && !ALLOWED_ENDS[family].includes(endA.type)) setEndA({ type:'', variantId:'' });
-    if (endB.type && !ALLOWED_ENDS[family].includes(endB.type)) setEndB({ type:'', variantId:'' });
-    if (endA.variantId && !isCompat(endA.variantId, gauge)) setEndA(p => ({ ...p, variantId:'' }));
-    if (endB.variantId && !isCompat(endB.variantId, gauge)) setEndB(p => ({ ...p, variantId:'' }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family, gauge]);
+    setEndA((p) => ({ ...p, variantId: '' }));
+    setEndB((p) => ({ ...p, variantId: '' }));
+    setPairMode(family === 'BatteryTwin');
+    const skus = [baseSku, sleeveSku, insSku, ...allEndSkus];
+    void fetchPrices(skus);
+  }, [family, gauge]); // eslint-disable-line
 
-  // selection pulse confirmation
-  function chooseEnd(side:'A'|'B', payload: EndChoice){
-    if (side==='A') setEndA(payload); else setEndB(payload);
-    setPulseSide(side);
-    setTimeout(()=>setPulseSide(null), 350);
-  }
+  // helpers
+  const p = (sku: string) => priceCache[sku]; // per unit (cm or each)
+  const basePerMCents = (p(baseSku) ?? 0) * 100; // base sku is per cm → per m *100
+  const baseCableCents = cents((pairMode ? 2 : 1) * lengthM * (p(baseSku) ?? 0) * 100);
+  const sleeveCents =
+    sleeve && p(sleeveSku) != null
+      ? cents((pairMode ? 2 : 1) * lengthCm * (p(sleeveSku) ?? 0))
+      : 0;
 
-  // PRICE MATH
-  const missing: string[] = [];
+  const endVarA =
+    endA.type && endA.variantId
+      ? END_OPTIONS[endA.type].variants.find((v) => v.id === endA.variantId)
+      : undefined;
+  const endVarBSrc =
+    endB.type && endB.variantId
+      ? END_OPTIONS[endB.type].variants.find((v) => v.id === endB.variantId)
+      : undefined;
 
-  const cablePerCm = requirePrice(`CABLE-${family}-${gauge}-CM`);
-  if (cablePerCm == null) missing.push(`CABLE-${family}-${gauge}-CM`);
-  const baseCableCents = cablePerCm != null ? cents(cablePerCm * lengthCm * (pairMode ? 2 : 1)) : 0;
+  const endPriceA =
+    endVarA ? cents((pairMode ? 2 : 1) * (p(`END-${endVarA.id.toUpperCase()}`) ?? 0)) : 0;
+  const endPriceB =
+    endVarBSrc ? cents((pairMode ? 2 : 1) * (p(`END-${endVarBSrc.id.toUpperCase()}`) ?? 0)) : 0;
+  const insCents = insulators ? cents((pairMode ? 4 : 2) * (p(insSku) ?? 0)) : 0;
 
-  const endPriceA = endA.variantId ? requirePrice(`END-${endA.variantId.toUpperCase()}`) : 0;
-  if (endA.variantId && endPriceA == null) missing.push(`END-${endA.variantId.toUpperCase()}`);
-  const endPriceB = endB.variantId ? requirePrice(`END-${endB.variantId.toUpperCase()}`) : 0;
-  if (endB.variantId && endPriceB == null) missing.push(`END-${endB.variantId.toUpperCase()}`);
-  const endCents = cents(((endPriceA || 0) + (endPriceB || 0)) * endUnits);
-
-  const sleevePerCm = sleeve ? requirePrice(`SLEEVE-${gauge}-CM`) : 0;
-  if (sleeve && sleevePerCm == null) missing.push(`SLEEVE-${gauge}-CM`);
-  const sleeveCents = cents((sleevePerCm || 0) * lengthCm * (pairMode ? 2 : 1));
-
-  const insBoot = insulators ? requirePrice('INSULATOR-LUG-BOOT') : 0;
-  if (insulators && insBoot == null) missing.push('INSULATOR-LUG-BOOT');
-  const insulatorCents = cents((insBoot || 0) * (pairMode ? 4 : 2));
-
-  const subtotal = baseCableCents + endCents + sleeveCents + insulatorCents;
-  const gst = Math.round(subtotal * 0.10);
+  const subtotal = baseCableCents + sleeveCents + endPriceA + endPriceB + insCents;
+  const gst = Math.round(subtotal * 0.1);
   const total = subtotal + gst;
 
-  // CART + CHECKOUT
-  function buildShopifyLineItems(){
-    const items:any[] = [];
-    const sku = `CABLE-${family}-${gauge}-CM`;
-    const props:any = { _family:family, _gauge:gauge, _length_m:safeLengthM.toFixed(2), _pair_mode: pairMode?'yes':'no', _label_a:labelA, _label_b:labelB };
-    if(pairMode){
-      items.push({ sku, quantity: lengthCm, properties:{...props, _core:'red'} });
-      items.push({ sku, quantity: lengthCm, properties:{...props, _core:'black'} });
-    }else{
-      items.push({ sku, quantity: lengthCm, properties: props });
+  /* --------------------------------------------------------------
+     UX helpers
+  -------------------------------------------------------------- */
+  const filteredEndTypes: EndType[] = useMemo(() => {
+    // Only show types that have 1+ compatible variants for current gauge
+    const types: EndType[] = [];
+    (Object.keys(END_OPTIONS) as EndType[]).forEach((t) => {
+      const has = END_OPTIONS[t].variants.some((v) => v.compat.includes(gauge));
+      if (has) types.push(t);
+    });
+    return types;
+  }, [gauge]);
+
+  function setEnd(type: EndType, variantId: string) {
+    if (whichEnd === 'A') setEndA({ type, variantId });
+    else setEndB({ type, variantId });
+  }
+
+  const selectedLeftType: EndType | '' = endA.type || '';
+  const selectedRightType: EndType | '' = endB.type || '';
+
+  function buildShopifyLineItems() {
+    const items: any[] = [];
+    const props: any = {
+      _family: family,
+      _gauge: gauge,
+      _length_m: lengthM.toFixed(2),
+      _pair_mode: pairMode ? 'yes' : 'no',
+      _label_a: labelA,
+      _label_b: labelB,
+    };
+
+    if (pairMode) {
+      items.push({ sku: baseSku, quantity: lengthCm, properties: { ...props, _core: 'red' } });
+      items.push({ sku: baseSku, quantity: lengthCm, properties: { ...props, _core: 'black' } });
+    } else {
+      items.push({ sku: baseSku, quantity: lengthCm, properties: props });
     }
-    const endUnits = (pairMode ? 2 : 1);
-    if(endA.variantId) items.push({ sku: `END-${endA.variantId.toUpperCase()}`, quantity: endUnits, properties:{ position:'A' } });
-    if(endB.variantId) items.push({ sku: `END-${endB.variantId.toUpperCase()}`, quantity: endUnits, properties:{ position:'B' } });
-    if(sleeve) items.push({ sku: `SLEEVE-${gauge}-CM`, quantity: pairMode?lengthCm*2:lengthCm });
-    if(insulators) items.push({ sku:`INSULATOR-LUG-BOOT`, quantity: pairMode?4:2 });
+
+    if (endVarA)
+      items.push({
+        sku: `END-${endVarA.id.toUpperCase()}`,
+        quantity: pairMode ? 2 : 1,
+        properties: { position: 'A' },
+      });
+    if (endVarBSrc)
+      items.push({
+        sku: `END-${endVarBSrc.id.toUpperCase()}`,
+        quantity: pairMode ? 2 : 1,
+        properties: { position: 'B' },
+      });
+
+    if (sleeve)
+      items.push({ sku: sleeveSku, quantity: pairMode ? lengthCm * 2 : lengthCm, properties: {} });
+
+    if (insulators)
+      items.push({ sku: insSku, quantity: pairMode ? 4 : 2, properties: {} });
+
     return items;
   }
-  async function addToCart(){
+
+  async function addToCart() {
+    const missing: string[] = [];
+    if (p(baseSku) == null) missing.push(baseSku);
+    if (sleeve && p(sleeveSku) == null) missing.push(sleeveSku);
+    if (insulators && p(insSku) == null) missing.push(insSku);
+    if (endVarA && p(`END-${endVarA.id.toUpperCase()}`) == null)
+      missing.push(`END-${endVarA.id.toUpperCase()}`);
+    if (endVarBSrc && p(`END-${endVarBSrc.id.toUpperCase()}`) == null)
+      missing.push(`END-${endVarBSrc.id.toUpperCase()}`);
+
+    if (missing.length) {
+      alert(`Missing price for: ${missing.join(', ')}`);
+      return;
+    }
+
     const items = buildShopifyLineItems();
     const r = await fetch('/api/add-to-cart', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
     });
     const { checkoutUrl, error } = await r.json();
-    if (error) { alert(error); return }
-    const target = (typeof window !== 'undefined' && window.top) ? window.top : window;
+    if (error) {
+      alert(error);
+      return;
+    }
+    const target = typeof window !== 'undefined' && window.top ? window.top : window;
     target.location.href = checkoutUrl;
   }
 
-  /* ---------- UI blocks ---------- */
-
-  const familyTiles = useMemo(() => ([
-    { key:'BatterySingle', label:'Battery — Single Core' },
-    { key:'Welding',       label:'Welding Cable' },
-    { key:'BatteryTwin',   label:'Battery — Twin' },
-  ] as const), []);
-
+  /* --------------------------------------------------------------
+     Panels
+  -------------------------------------------------------------- */
   const StepType = (
-    <section className="card">
-      <header className="card-h">
-        <div className="card-t">Cable type</div>
-        <div className="card-sub">Choose the family that fits your job.</div>
-      </header>
-      <div className="tiles">
-        {familyTiles.map(t => (
+    <div className="card">
+      <div className="section-title">Choose cable type</div>
+      <div className="tileGrid">
+        {[
+          { key: 'BatterySingle', label: 'Battery — Single Core' },
+          { key: 'Welding', label: 'Welding Cable' },
+          { key: 'BatteryTwin', label: 'Battery — Twin (pair)' },
+        ].map((t) => (
           <button
             key={t.key}
             type="button"
-            className={`tile ${family===t.key ? 'selected':''}`}
-            onClick={() => { setFamily(t.key as Family); setPairMode(t.key==='BatteryTwin'); }}
-            title={t.label}
+            className={`tile ${family === (t.key as Family) ? 'selected' : ''}`}
+            onClick={() => {
+              setFamily(t.key as Family);
+              setPairMode(t.key === 'BatteryTwin');
+            }}
           >
-            <div className="tile-label">{t.label}</div>
+            <span className="tileLabel">{t.label}</span>
           </button>
         ))}
       </div>
-    </section>
+    </div>
   );
 
   const StepGauge = (
-    <section className="card">
-      <header className="card-h">
-        <div className="card-t">Gauge</div>
-        <div className="card-sub">Pick the conductor size.</div>
-      </header>
-      <select className="select" value={gauge} onChange={e=>setGauge(e.target.value as Gauge)}>
-        {GAUGES[family].map(g=><option key={g} value={g}>{g}</option>)}
-      </select>
-      <label className="switch" style={{marginTop:12}}>
-        <input type="checkbox" checked={pairMode} onChange={e=>setPairMode(e.target.checked)} disabled={family!=='BatteryTwin'} />
-        <span>Pair mode (red/black)</span>
-      </label>
-    </section>
+    <div className="card">
+      <div className="section-title">Gauge</div>
+      <input
+        className="input"
+        value={gauge}
+        onChange={(e) => setGauge(e.target.value as Gauge)}
+        placeholder="e.g. 4, 0, 00, 6mm, 95mm2"
+      />
+      <div className="hint">Prices are fetched live from Shopify for the selected gauge.</div>
+      <div className="lede" style={{ marginTop: 12 }}>
+        {loadingPrices ? 'Loading prices…' : `Base (per m): $${dollars(basePerMCents)}`}
+      </div>
+    </div>
   );
 
   const StepLength = (
-    <section className="card">
-      <header className="card-h">
-        <div className="card-t">Length</div>
-        <div className="card-sub">Set an exact length for precision fit.</div>
-      </header>
+    <div className="card">
+      <div className="section-title">Length</div>
       <div className="row">
-        <div className="field">
-          <div className="field-top">
-            <label>Metres</label>
-            <span className="hint">{lengthCm} cm</span>
-          </div>
-          <input className="input" type="number" step="0.01" min={0.05} value={lengthM} onChange={e=>setLengthM(parseFloat(e.target.value||'0'))}/>
-        </div>
+        <input
+          type="number"
+          step="0.01"
+          min={0.05}
+          className="input"
+          value={lengthM}
+          onChange={(e) => setLengthM(parseFloat(e.target.value || '0'))}
+        />
+        <div className="pillMuted">≈ {lengthCm} cm</div>
       </div>
-    </section>
+      <label className={`switch ${family === 'BatteryTwin' ? 'disabled' : ''}`}>
+        <input
+          type="checkbox"
+          checked={pairMode}
+          onChange={(e) => setPairMode(e.target.checked)}
+          disabled={family !== 'BatteryTwin'}
+        />
+        <span>Pair mode (red/black)</span>
+      </label>
+    </div>
   );
 
   const StepEnds = (
-    <section className="card">
-      <header className="card-h">
-        <div className="card-t">Ends</div>
-        <div className="card-sub">Choose terminations with a visual preview.</div>
-      </header>
+    <div className="card">
+      <div className="section-title">Ends</div>
 
-      {/* Live SVG preview */}
-      <CablePreview
-        gauge={gauge}
-        endLeft={{ type:endA.type||undefined, variantId:endA.variantId||undefined }}
-        endRight={{ type:endB.type||undefined, variantId:endB.variantId||undefined }}
-        pulseSide={pulseSide}
-      />
+      <CablePreview left={selectedLeftType} right={selectedRightType} />
 
-      {/* Left / Right segmented control */}
       <div className="seg">
-        <button type="button" className={activeSide==='A' ? 'on' : ''} onClick={()=>setActiveSide('A')}>Left</button>
-        <button type="button" className={activeSide==='B' ? 'on' : ''} onClick={()=>setActiveSide('B')}>Right</button>
+        <button
+          type="button"
+          className={`segBtn ${whichEnd === 'A' ? 'active' : ''}`}
+          onClick={() => setWhichEnd('A')}
+        >
+          Left
+        </button>
+        <button
+          type="button"
+          className={`segBtn ${whichEnd === 'B' ? 'active' : ''}`}
+          onClick={() => setWhichEnd('B')}
+        >
+          Right
+        </button>
       </div>
-      <div className="seg-hint">Active: <strong>{activeSide==='A' ? 'Left' : 'Right'}</strong></div>
 
-      {/* Allowed end types with only compatible variants */}
-      {ALLOWED_ENDS[family]
-        .map((t) => {
-          const vars = END_OPTIONS[t].variants.filter(v => v.compat.includes(gauge));
-          return { type: t, label: END_OPTIONS[t].label, vars };
-        })
-        .filter(group => group.vars.length > 0)
-        .map(group => (
-          <div className="end-group" key={group.type}>
-            <div className="end-type">{group.label}</div>
-            <div className="chips">
-              {group.vars.map(v => {
-                const sel = (activeSide==='A' && endA.variantId===v.id) || (activeSide==='B' && endB.variantId===v.id);
+      <div className="lede" style={{ marginBottom: 4 }}>
+        Choose end type
+      </div>
+      <div className="endTypeRow">
+        {filteredEndTypes.map((t) => {
+          const active =
+            (whichEnd === 'A' ? endA.type : endB.type) === t ? 'active' : '';
+          return (
+            <button
+              key={t}
+              type="button"
+              className={`endType ${active}`}
+              onClick={() => {
+                // select first compatible variant by default
+                const first = END_OPTIONS[t].variants.find((v) => v.compat.includes(gauge));
+                setEnd(t, first?.id ?? '');
+              }}
+              title={END_OPTIONS[t].label}
+            >
+              <EndIcon type={t} />
+              <div>{END_OPTIONS[t].label}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Variant chips (only compatible) */}
+      {(whichEnd === 'A' ? endA.type : endB.type) && (
+        <>
+          <div className="lede" style={{ marginTop: 8 }}>
+            Variant (compatible with {gauge} B&S)
+          </div>
+          <div className="chipRow">
+            {END_OPTIONS[(whichEnd === 'A' ? endA.type : endB.type) as EndType].variants
+              .filter((v) => v.compat.includes(gauge))
+              .map((v) => {
+                const selected =
+                  (whichEnd === 'A' ? endA.variantId : endB.variantId) === v.id;
                 return (
                   <button
                     key={v.id}
                     type="button"
-                    className={`chip ${sel?'sel':''}`}
-                    onClick={() => chooseEnd(activeSide, { type: group.type as EndType, variantId: v.id })}
-                    title={v.label}
+                    className={`chip ${selected ? 'selected' : ''}`}
+                    onClick={() => setEnd((whichEnd === 'A' ? endA.type : endB.type) as EndType, v.id)}
                   >
                     {v.label}
                   </button>
                 );
               })}
-            </div>
           </div>
-        ))
-      }
-
-      <div className="clear-row">
-        <button
-          type="button"
-          className="chip ghost"
-          onClick={() => chooseEnd(activeSide, { type:'', variantId:'' })}
-        >
-          No termination
-        </button>
-      </div>
-    </section>
+        </>
+      )}
+    </div>
   );
 
   const StepExtras = (
-    <section className="card">
-      <header className="card-h">
-        <div className="card-t">Extras</div>
-        <div className="card-sub">Add protection and labels.</div>
-      </header>
-      <label className="switch">
-        <input type="checkbox" checked={sleeve} onChange={e=>setSleeve(e.target.checked)}/>
-        <span>Full-length braided sleeving</span>
+    <div className="card">
+      <div className="section-title">Extras</div>
+      <label className="check">
+        <input type="checkbox" checked={sleeve} onChange={(e) => setSleeve(e.target.checked)} />
+        Add braided sleeving (full length)
       </label>
-      <label className="switch">
-        <input type="checkbox" checked={insulators} onChange={e=>setInsulators(e.target.checked)}/>
-        <span>Lug insulators (pair)</span>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={insulators}
+          onChange={(e) => setInsulators(e.target.checked)}
+        />
+        Add lug insulators (pair)
       </label>
-      <div className="row" style={{marginTop:10}}>
-        <div className="field">
-          <div className="field-top"><label>Label A</label></div>
-          <input className="input" placeholder="e.g. Start Battery" value={labelA} onChange={e=>setLabelA(e.target.value)} />
-        </div>
-        <div className="field">
-          <div className="field-top"><label>Label B</label></div>
-          <input className="input" placeholder="e.g. Inverter +" value={labelB} onChange={e=>setLabelB(e.target.value)} />
-        </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <input className="input" placeholder="Label A" value={labelA} onChange={(e) => setLabelA(e.target.value)} />
+        <input className="input" placeholder="Label B" value={labelB} onChange={(e) => setLabelB(e.target.value)} />
       </div>
-    </section>
+    </div>
   );
 
   const StepReview = (
-    <section className="card">
-      <header className="card-h">
-        <div className="card-t">Review</div>
-        <div className="card-sub">Confirm configuration and pricing.</div>
-      </header>
-
-      <div className="review-grid">
-        <div className="card subtle">
-          <div className="kv"><span>Type</span><strong>{family}{pairMode?' (pair)':''}</strong></div>
+    <div className="card">
+      <div className="section-title">Review</div>
+      <div className="rowCards">
+        <div className="subcard">
+          <div className="miniTitle">Configuration</div>
+          <div className="kv"><span>Type</span><strong>{family}{pairMode ? ' (pair)' : ''}</strong></div>
           <div className="kv"><span>Gauge</span><strong>{gauge} B&S</strong></div>
-          <div className="kv"><span>Length</span><strong>{safeLengthM.toFixed(2)} m</strong></div>
-          <div className="kv"><span>Ends</span><strong>{(endA.variantId && endA.type) ? END_OPTIONS[endA.type].variants.find(v=>v.id===endA.variantId)?.label : '—'} / {(endB.variantId && endB.type) ? END_OPTIONS[endB.type].variants.find(v=>v.id===endB.variantId)?.label : '—'}</strong></div>
+          <div className="kv"><span>Length</span><strong>{lengthM.toFixed(2)} m</strong></div>
+          <div className="kv"><span>Ends</span><strong>{endVarA?.label || '—'} / {endVarBSrc?.label || '—'}</strong></div>
           <div className="kv"><span>Sleeving</span><strong>{sleeve ? 'Full' : 'None'}</strong></div>
           <div className="kv"><span>Insulators</span><strong>{insulators ? 'Yes' : 'No'}</strong></div>
         </div>
-
-        <div className="card subtle">
-          {priceLoading ? (
-            <>
-              <div className="skeleton-row" /><div className="skeleton-row" />
-              <div className="skeleton-row short" />
-            </>
-          ) : missing.length ? (
-            <div className="warn" style={{marginBottom:8}}>
-              Missing price for: {missing.join(', ')}
-            </div>
-          ) : (
-            <>
-              <div className="kv"><span>Base cable</span><strong>${dollars(baseCableCents)}</strong></div>
-              <div className="kv"><span>Ends</span><strong>${dollars(endCents)}</strong></div>
-              <div className="kv"><span>Sleeving</span><strong>${dollars(sleeveCents)}</strong></div>
-              <div className="kv"><span>Insulators</span><strong>${dollars(insulatorCents)}</strong></div>
-              <div className="rule" />
-              <div className="kv big"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
-              <div className="kv"><span>GST (10%)</span><strong>${dollars(gst)}</strong></div>
-              <div className="kv xl"><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
-            </>
-          )}
+        <div className="subcard">
+          <div className="miniTitle">Price</div>
+          <div className="kv"><span>Base cable</span><b>${dollars(baseCableCents)}</b></div>
+          <div className="kv"><span>Ends</span><b>${dollars(endPriceA + endPriceB)}</b></div>
+          <div className="kv"><span>Sleeving</span><b>${dollars(sleeveCents)}</b></div>
+          <div className="kv"><span>Insulators</span><b>${dollars(insCents)}</b></div>
+          <div className="rule" />
+          <div className="kv"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
+          <div className="kv"><span>GST (10%)</span><b>${dollars(gst)}</b></div>
+          <div className="kv big"><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
         </div>
       </div>
-    </section>
+    </div>
   );
 
   const panels = [StepType, StepGauge, StepLength, StepEnds, StepExtras, StepReview];
-  const disableCheckout = priceLoading || missing.length > 0;
 
+  /* --------------------------------------------------------------
+     Render
+  -------------------------------------------------------------- */
   return (
-    <div className="wrap" data-ui-version={UI_VERSION}>
-      <header className="hero">
-        <div className="hero-title">Cable Builder</div>
-        <div className="hero-sub">Design precision power cables — clean, fast, exact.</div>
-        <div className="hero-ver">{UI_VERSION}</div>
-      </header>
+    <div className="wrap">
+      <h1 className="h1">Cable Designer</h1>
+      <p className="ledeTop">Design precision power cables — clean, fast, exact.</p>
 
       <Stepper steps={steps} current={step} onGo={setStep} />
 
-      <main className="grid">
-        <div className="main">
+      <div className="grid">
+        <div>
           {panels[step]}
-          <div className="cta-row">
-            <button className="btn ghost" onClick={()=>setStep(s=>Math.max(0, s-1))} disabled={step===0}>Back</button>
-            {step<steps.length-1
-              ? <button className="btn primary" onClick={()=>setStep(s=>Math.min(steps.length-1, s+1))}>Continue</button>
-              : <button className="btn primary" onClick={addToCart} disabled={disableCheckout}>
-                  {disableCheckout ? 'Prices not ready' : 'Add to cart'}
-                </button>}
+          <div className="actions">
+            <button className="btn" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
+              Back
+            </button>
+            {step < steps.length - 1 ? (
+              <button className="btnPrimary" onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))}>
+                Continue
+              </button>
+            ) : (
+              <button className="btnPrimary" onClick={addToCart}>
+                Add to cart
+              </button>
+            )}
           </div>
         </div>
 
-        <aside className="aside">
-          <div className="card sticky">
-            <div className="card-h">
-              <div className="card-t">Summary</div>
-              <div className="card-sub">{family}{pairMode?' (pair)':''} • {gauge} B&S • {safeLengthM.toFixed(2)} m</div>
-            </div>
-            {priceLoading ? (
-              <>
-                <div className="skeleton-row" /><div className="skeleton-row" />
-                <div className="skeleton-row short" />
-              </>
-            ) : missing.length ? (
-              <div className="warn">Missing price for: {missing.join(', ')}</div>
-            ) : (
-              <>
-                <div className="kv"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
-                <div className="kv"><span>GST (10%)</span><strong>${dollars(gst)}</strong></div>
-                <div className="kv xl"><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
-              </>
-            )}
-          </div>
+        <aside className="summary card">
+          <div className="miniTitle">Summary</div>
+          <div className="lede">{family}{pairMode ? ' • pair' : ''} • {gauge} B&S • {lengthM.toFixed(2)} m</div>
+          <div className="kv"><span>Subtotal (ex GST)</span><strong>${dollars(subtotal)}</strong></div>
+          <div className="kv"><span>GST (10%)</span><b>${dollars(gst)}</b></div>
+          <div className="kv big"><span>Total (inc GST)</span><strong>${dollars(total)}</strong></div>
+          {loadingPrices && <div className="hint" style={{ marginTop: 8 }}>Fetching live prices…</div>}
         </aside>
-      </main>
+      </div>
 
-      {/* LIGHT THEME (Apple-esque) */}
+      {/* light theme styles */}
       <style jsx>{`
-        :root{
-          --bg:#f6f7f9; --card:#ffffff; --line:#e7e9ee; --muted:#f1f3f6;
-          --text:#0b0c0e; --sub:#6b737c; --brand:#0071e3; --brand2:#4aa3ff; --ok:#11884b; --warn:#b2401b;
+        :global(:root) {
+          --bg: #ffffff;
+          --text: #0a0a0a;
+          --line: #e6e8eb;
+          --muted: #f7f8fa;
+          --primary: #111111;
         }
-        .wrap{ color:var(--text); background:var(--bg); min-height:100vh; padding:28px; }
-        .hero{ margin:2px 0 18px; }
-        .hero-title{ font-size:32px; font-weight:800; letter-spacing:.2px; }
-        .hero-sub{ color:var(--sub); margin-top:6px; }
-        .hero-ver{ color:var(--sub); font-size:12px; opacity:.7; margin-top:4px; }
-
-        .steps{ display:flex; gap:8px; list-style:none; padding:0; margin:14px 0 22px; }
-        .step{ display:flex; align-items:center; gap:8px; background:var(--muted); border:1px solid var(--line);
-          padding:8px 12px; border-radius:999px; font-weight:600; color:#394047; }
-        .step .idx{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
-          border-radius:999px; background:#e9edf2; }
-        .step.done .idx{ background:#d9ecff; }
-        .step.cur{ background:#e9f2ff; border-color:#cfe6ff; color:#0b3a64; }
-        .step.cur .idx{ background:#cfe6ff; }
-
-        .grid{ display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:22px; }
-        @media (max-width: 980px){ .grid{ grid-template-columns:1fr; } .aside{ order:-1; } }
-
-        .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
-        .card.subtle{ background:#fafbfc; }
-        .card-h{ margin-bottom:10px; }
-        .card-t{ font-weight:800; font-size:18px; }
-        .card-sub{ color:var(--sub); font-size:14px; margin-top:2px; }
-
-        .tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:6px; }
-        .tile{ background:var(--muted); border:1px solid var(--line); border-radius:14px; padding:14px; text-align:center; }
-        .tile.selected{ outline:2px solid var(--brand); background:#eef6ff; }
-
-        .select, .input{ width:100%; border:1px solid var(--line); background:#fff; border-radius:12px; padding:10px 12px; font-size:16px; }
-        .row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
-        .field-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-        .hint{ color:var(--sub); font-size:12px; }
-
-        .switch{ display:flex; align-items:center; gap:10px; padding:8px 0; }
-        .switch input{ width:18px; height:18px; }
-
-        .seg{ display:inline-flex; border:1px solid var(--line); background:#fff; border-radius:999px; overflow:hidden; margin:6px 0; }
-        .seg button{ padding:8px 16px; border:none; background:transparent; font-weight:700; color:#5b636b; }
-        .seg button.on{ background:#111; color:#fff; }
-        .seg-hint{ color:var(--sub); font-size:12px; margin-top:4px; }
-
-        .chips{ display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 2px; }
-        .chip{ border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px; font-weight:600; }
-        .chip.sel{ border-color:var(--brand); box-shadow:0 0 0 2px rgba(0,113,227,.12); }
-        .chip.ghost{ background:var(--muted); }
-
-        .end-group{ margin-top:10px; }
-        .end-type{ color:#2e3338; font-weight:700; font-size:14px; margin:8px 0 4px; }
-
-        .cta-row{ display:flex; gap:10px; margin-top:16px; }
-        .btn{ border:1px solid var(--line); border-radius:12px; padding:10px 14px; font-weight:700; background:#fff; }
-        .btn.primary{ background:var(--brand); color:#fff; border-color:var(--brand); }
-        .btn.primary:disabled{ opacity:.6; }
-        .btn.ghost{ background:#fff; }
-
-        .aside .sticky{ position:sticky; top:16px; }
-        .kv{ display:flex; align-items:center; justify-content:space-between; padding:8px 0; }
-        .kv.big{ font-size:18px; font-weight:800; }
-        .kv.xl{ font-size:20px; font-weight:800; }
-        .rule{ height:1px; background:var(--line); margin:10px 0; }
-        .warn{ color:var(--warn); font-weight:700; }
-
-        .skeleton-row{ height:16px; background:linear-gradient(90deg,#f2f4f7,#e9edf2,#f2f4f7); border-radius:8px; margin:8px 0;
-          animation:sh 1.3s linear infinite; } .skeleton-row.short{ width:60%; }
-        @keyframes sh{ 0%{background-position:-30% 0} 100%{background-position:130% 0} }
-
-        /* Preview */
-        .preview{ background:#fff; border:1px solid var(--line); border-radius:14px; margin-bottom:8px; }
-        .end.pulse{ filter:drop-shadow(0 0 6px rgba(0,113,227,.35)); animation:blink .35s ease; }
-        @keyframes blink{ 0%{opacity:.5} 100%{opacity:1} }
+        .wrap {
+          max-width: 1100px;
+          margin: 32px auto 80px;
+          padding: 0 20px;
+          color: var(--text);
+        }
+        .h1 {
+          font-size: 36px;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          margin: 0 0 4px;
+        }
+        .ledeTop {
+          color: #5b6168;
+          margin: 0 0 18px;
+        }
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr 360px;
+          gap: 18px;
+          align-items: start;
+        }
+        @media (max-width: 980px) {
+          .grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        .card {
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          padding: 16px;
+        }
+        .subcard {
+          background: var(--muted);
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 14px;
+        }
+        .row {
+          display: grid;
+          grid-template-columns: 1fr 160px;
+          gap: 10px;
+          align-items: center;
+        }
+        .rowCards {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        @media (max-width: 900px) {
+          .row {
+            grid-template-columns: 1fr;
+          }
+          .rowCards {
+            grid-template-columns: 1fr;
+          }
+        }
+        .summary {
+          position: sticky;
+          top: 16px;
+        }
+        .section-title {
+          font-weight: 600;
+          margin-bottom: 10px;
+        }
+        .input {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          font-size: 16px;
+        }
+        .pillMuted {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 12px;
+          height: 40px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: var(--muted);
+        }
+        .tileGrid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 10px;
+        }
+        .tile {
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 16px;
+          background: #fff;
+          text-align: left;
+        }
+        .tile.selected {
+          border-color: #111;
+          box-shadow: 0 0 0 2px #111 inset;
+        }
+        .tileLabel {
+          font-weight: 600;
+        }
+        .seg {
+          display: inline-flex;
+          border: 1px solid var(--line);
+          border-radius: 999px;
+          overflow: hidden;
+          margin: 12px 0 10px;
+        }
+        .segBtn {
+          padding: 8px 14px;
+          background: #fff;
+          color: #111;
+        }
+        .segBtn.active {
+          background: #111;
+          color: #fff;
+        }
+        .endTypeRow {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 10px;
+        }
+        .endType {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 10px 12px;
+          background: #fff;
+        }
+        .endType.active {
+          border-color: #111;
+        }
+        .chipRow {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .chip {
+          border: 1px solid var(--line);
+          border-radius: 999px;
+          padding: 8px 12px;
+          background: #fff;
+        }
+        .chip.selected {
+          border-color: #111;
+          background: #111;
+          color: #fff;
+        }
+        .check {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 0;
+        }
+        .switch {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          margin-top: 10px;
+          opacity: 1;
+        }
+        .switch.disabled {
+          opacity: 0.55;
+          pointer-events: none;
+        }
+        .miniTitle {
+          font-weight: 600;
+          margin-bottom: 8px;
+        }
+        .kv {
+          display: flex;
+          justify-content: space-between;
+          padding: 6px 0;
+          border-bottom: 1px dashed var(--line);
+        }
+        .kv.big {
+          font-size: 18px;
+        }
+        .rule {
+          height: 1px;
+          background: var(--line);
+          margin: 8px 0;
+        }
+        .actions {
+          display: flex;
+          gap: 10px;
+          margin-top: 14px;
+        }
+        .btn,
+        .btnPrimary {
+          padding: 10px 14px;
+          border-radius: 12px;
+          border: 1px solid var(--line);
+          background: #fff;
+        }
+        .btnPrimary {
+          background: #111;
+          color: #fff;
+          border-color: #111;
+        }
+        .hint {
+          color: #6a7077;
+          font-size: 13px;
+        }
       `}</style>
     </div>
   );
