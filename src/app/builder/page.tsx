@@ -1,10 +1,6 @@
-'use client';
+// src/app/builder/page.tsx
+import Builder from '@/components/Builder';
 
-import React, { useEffect, useMemo, useState } from 'react';
-
-/* …all the same code I sent… */
-/* It’s identical except the final export is: */
-
-export default function Builder() {
-  /* the whole component body exactly as in my last message */
+export default function Page() {
+  return <Builder />;
 }
