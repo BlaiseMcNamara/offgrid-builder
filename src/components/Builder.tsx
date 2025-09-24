@@ -156,7 +156,7 @@ export default function Builder() {
 
   const [family, setFamily] = useState<Family>('BatterySingle');
   const [gauge, setGauge] = useState<Gauge>(GAUGES['BatterySingle'][0]);
-  const [lengthM, setLengthM] = useState<number>(1.0);
+  const [lengthM, setLengthM] = useState<number>(0.0);
   const [pairMode, setPairMode] = useState<boolean>(false);
 
   const [left, setLeft] = useState<EndChoice>({ type: '', variantId: '' });
@@ -255,7 +255,7 @@ export default function Builder() {
 
   const bump = (delta: number) => {
     setLengthM((x) => {
-      const v = Math.max(0.01, Math.round((x + delta) * 100) / 100);
+      const v = Math.max(0.00, Math.round((x + delta) * 100) / 100);
       return Number(v.toFixed(2));
     });
   };
