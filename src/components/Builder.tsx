@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 /* ================================================================
-   STEP INDICATOR
+   STEP INDICATOR (clean + light)
 ================================================================ */
 function Steps({
   labels,
@@ -76,14 +76,14 @@ const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = 
   },
 };
 
-// Dropdown choices per family (must match your Shopify SKU scheme)
+// Dropdown choices per family (aligns with your Shopify SKUs)
 const GAUGES: Record<Family, Gauge[]> = {
   BatterySingle: ['0000','000','00','0','1','2','3','4','6','8','6mm'],
   BatteryTwin:   ['0000','000','00','0','1','2','3','4','6','8','6mm'],
   Welding:       ['95mm2','70mm2','50mm2','35mm2'],
 };
 
-// Map Welding sizes to equivalent B&S for end compatibility lookups
+// Map Welding sizes to equivalent B&S for end compatibility
 const GAUGE_COMPAT_ALIAS: Record<string, string> = {
   '95mm2': '0000',
   '70mm2': '000',
@@ -93,7 +93,6 @@ const GAUGE_COMPAT_ALIAS: Record<string, string> = {
 
 const cents = (n: number) => Math.round(n * 100);
 const fmt = (cents: number) => (cents / 100).toFixed(2);
-const fmtM = (m: number) => `${m.toFixed(2)} m`;
 
 /* ================================================================
    SMALL UI PIECES
@@ -156,8 +155,14 @@ export default function Builder() {
 
   const [family, setFamily] = useState<Family>('BatterySingle');
   const [gauge, setGauge] = useState<Gauge>(GAUGES['BatterySingle'][0]);
+
+  // Committed numeric length in metres (used for pricing)
   const [lengthM, setLengthM] = useState<number>(0.0);
-  const [pairMode, setPairMode] = useState<boolean>(false);
+  // Raw text the user types (prevents cursor jump)
+  const [lengthText, setLengthText] = useState<string>(lengthM.toFixed(2));
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  const [pairMode, setPairMode] = useState<boolean>(false); // auto for BatteryTwin
 
   const [left, setLeft] = useState<EndChoice>({ type: '', variantId: '' });
   const [right, setRight] = useState<EndChoice>({ type: '', variantId: '' });
@@ -194,7 +199,7 @@ export default function Builder() {
       for (const [k, v] of Object.entries(j.prices)) next[k] = v?.price ?? null;
       setPriceCache(next);
     } catch {
-      /* ignore */
+      /* ignore; UI shows loading/missing */
     } finally {
       setLoadingPrices(false);
     }
@@ -207,16 +212,16 @@ export default function Builder() {
     setLeft({ type: '', variantId: '' });
     setRight({ type: '', variantId: '' });
     setPairMode(family === 'BatteryTwin');
-    // fetch happens in the next effect (on actual gauge/family value)
   }, [family]);
 
-  // fetch prices whenever (family,gauge) change
+  // Fetch prices whenever (family,gauge) change
   useEffect(() => {
     void fetchPrices([baseSku, sleeveSku, insSku, ...allEndSkus]);
   }, [family, gauge]); // eslint-disable-line
 
   const p = (sku: string) => priceCache[sku];
 
+  // Totals (Shopify returns per-cm for cable/sleeve; each for ends/ins)
   const baseCableCents = cents((p(baseSku) ?? 0) * lengthCm * (pairMode ? 2 : 1));
   const sleeveCents =
     addSleeve && p(sleeveSku) != null
@@ -239,7 +244,7 @@ export default function Builder() {
   const gst = Math.round(subtotal * 0.1);
   const total = subtotal + gst;
 
-  // compatibility key (alias for Welding)
+  // Compatibility key (alias welding → B&S)
   const compatKey = GAUGE_COMPAT_ALIAS[gauge] ?? gauge;
 
   const availableTypes: EndType[] = useMemo(() => {
@@ -253,12 +258,26 @@ export default function Builder() {
     return END_OPTIONS[t].variants.filter((v) => v.compat.includes(compatKey));
   }
 
+  // Length: +/- 1cm and typeable input (no cursor jump)
   const bump = (delta: number) => {
     setLengthM((x) => {
-      const v = Math.max(0.00, Math.round((x + delta) * 100) / 100);
-      return Number(v.toFixed(2));
+      const next = Math.max(0, round2(x + delta));
+      setLengthText(next.toFixed(2));
+      return next;
     });
   };
+
+  function commitLengthText() {
+    const s = (lengthText ?? '').replace(',', '.').trim();
+    const n = Number(s);
+    if (Number.isNaN(n)) {
+      setLengthText(lengthM.toFixed(2));
+      return;
+    }
+    const clamped = Math.max(0, round2(n));
+    setLengthM(clamped);
+    setLengthText(clamped.toFixed(2));
+  }
 
   function totalsBox() {
     return (
@@ -294,23 +313,25 @@ export default function Builder() {
       items.push({ sku: baseSku, quantity: lengthCm, properties: props });
     }
 
-    if (left.variantId) items.push({ sku: `END-${left.variantId.toUpperCase()}`, quantity: pairMode ? 2 : 1, properties: { position: 'A' } });
+    if (left.variantId)  items.push({ sku: `END-${left.variantId.toUpperCase()}`,  quantity: pairMode ? 2 : 1, properties: { position: 'A' } });
     if (right.variantId) items.push({ sku: `END-${right.variantId.toUpperCase()}`, quantity: pairMode ? 2 : 1, properties: { position: 'B' } });
 
-    if (addSleeve) items.push({ sku: sleeveSku, quantity: pairMode ? lengthCm * 2 : lengthCm });
-    if (addInsulators) items.push({ sku: insSku, quantity: pairMode ? 4 : 2 });
+    if (addSleeve)     items.push({ sku: sleeveSku, quantity: pairMode ? lengthCm * 2 : lengthCm });
+    if (addInsulators) items.push({ sku: insSku,    quantity: pairMode ? 4 : 2 });
 
     return items;
   }
 
   async function addToCart() {
+    // Guards
+    if (lengthCm < 1) { alert('Please set a cable length greater than 0.'); return; }
+
     const missing: string[] = [];
     if (p(baseSku) == null) missing.push(baseSku);
     if (addSleeve && p(sleeveSku) == null) missing.push(sleeveSku);
     if (addInsulators && p(insSku) == null) missing.push(insSku);
-    if (left.variantId && p(`END-${left.variantId.toUpperCase()}`) == null) missing.push(`END-${left.variantId.toUpperCase()}`);
+    if (left.variantId  && p(`END-${left.variantId.toUpperCase()}`)  == null) missing.push(`END-${left.variantId.toUpperCase()}`);
     if (right.variantId && p(`END-${right.variantId.toUpperCase()}`) == null) missing.push(`END-${right.variantId.toUpperCase()}`);
-
     if (missing.length) { alert(`Missing price for: ${missing.join(', ')}`); return; }
 
     const r = await fetch('/api/add-to-cart', {
@@ -331,18 +352,17 @@ export default function Builder() {
       <div className="title">Choose your cable</div>
       <div className="gridTiles">
         <TypeTile label="Battery — Single Core" active={family === 'BatterySingle'} onClick={() => setFamily('BatterySingle')} />
-        <TypeTile label="Welding Cable" active={family === 'Welding'} onClick={() => setFamily('Welding')} />
-        <TypeTile label="Battery — Twin (pair)" active={family === 'BatteryTwin'} onClick={() => setFamily('BatteryTwin')} />
+        <TypeTile label="Welding Cable"          active={family === 'Welding'}       onClick={() => setFamily('Welding')} />
+        <TypeTile label="Battery — Twin (pair)"  active={family === 'BatteryTwin'}   onClick={() => setFamily('BatteryTwin')} />
       </div>
 
       <div className="mt12">
         <label className="lab">Gauge</label>
         <select className="select" value={gauge} onChange={(e) => setGauge(e.target.value as Gauge)}>
-          {GAUGES[family].map((g) => (
-            <option key={g} value={g}>{g}</option>
-          ))}
+          {GAUGES[family].map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
       </div>
+
       <style jsx>{`
         .card{border:1px solid #e6e8eb;border-radius:18px;background:#fff;padding:16px}
         .title{font-weight:700;margin-bottom:10px}
@@ -354,63 +374,50 @@ export default function Builder() {
     </div>
   );
 
-   // Converts typed text into a 2-decimal metres value (0.01 m = 1 cm)
-function setLengthFromInput(raw: string) {
-  const val = raw.replace(',', '.');         // allow 1,25 as 1.25
-  const n = Number(val);
-  if (Number.isNaN(n)) return;               // ignore junk while typing
-  const clamped = Math.max(0, Math.round(n * 100) / 100);
-  setLengthM(Number(clamped.toFixed(2)));
-}
-
-
   const Step2 = (
-  <div className="card">
-    <div className="title">Length</div>
+    <div className="card">
+      <div className="title">Length</div>
+      <div className="row">
+        <div className="qtyBox">
+          <button className="inc" onClick={() => bump(-0.01)} aria-label="decrease length">−</button>
 
-    <div className="row">
-      <div className="qtyBox">
-        <button className="inc" onClick={() => bump(-0.01)} aria-label="decrease length">−</button>
+          <div className="qtyInputWrap">
+            <input
+              className="qtyInput"
+              type="text"             // text prevents auto-format cursor jumps
+              inputMode="decimal"
+              value={lengthText}
+              onChange={(e) => setLengthText(e.target.value)}
+              onBlur={commitLengthText}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitLengthText(); }}
+              aria-label="cable length in metres"
+            />
+            <span className="unit">m</span>
+          </div>
 
-        {/* ✅ You can now type the length in metres with 2 decimals */}
-        <div className="qtyInputWrap">
-          <input
-            className="qtyInput"
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={lengthM.toFixed(2)}
-            onChange={(e) => setLengthFromInput(e.target.value)}
-            onBlur={(e) => setLengthFromInput(e.target.value)} // normalize to 2dp on blur
-          />
-          <span className="unit">m</span>
+          <button className="inc" onClick={() => bump(+0.01)} aria-label="increase length">+</button>
         </div>
 
-        <button className="inc" onClick={() => bump(+0.01)} aria-label="increase length">+</button>
+        <div className="pill">{pairMode ? 'Pair (red/black)' : 'Single core'}</div>
       </div>
 
-      <div className="pill">{pairMode ? 'Pair (red/black)' : 'Single core'}</div>
+      <div className="hint">1 cm = 0.01 m. Current length ≈ <strong>{lengthCm}</strong> cm.</div>
+      {totalsBox()}
+
+      <style jsx>{`
+        .card{border:1px solid #e6e8eb;border-radius:18px;background:#fff;padding:16px}
+        .title{font-weight:700;margin-bottom:10px}
+        .row{display:flex;align-items:center;gap:12px;margin:6px 0 8px}
+        .qtyBox{display:flex;align-items:center;border:1px solid #e6e8eb;border-radius:12px;background:#fff;overflow:hidden}
+        .inc{width:40px;height:40px;font-size:20px;border:0;background:#f7f8fa}
+        .qtyInputWrap{display:flex;align-items:center;gap:6px;padding:0 8px}
+        .qtyInput{width:90px;text-align:right;font-weight:700;border:0;outline:none;font-size:16px;background:transparent}
+        .unit{color:#6a7077;font-weight:600}
+        .pill{border:1px solid #e6e8eb;border-radius:12px;background:#f7f8fa;padding:8px 12px}
+        .hint{margin-top:6px;color:#6a7077;font-size:13px}
+      `}</style>
     </div>
-
-    <div className="hint">1 cm = 0.01 m. Current length ≈ <strong>{lengthCm}</strong> cm.</div>
-    {totalsBox()}
-
-    <style jsx>{`
-      .card{border:1px solid #e6e8eb;border-radius:18px;background:#fff;padding:16px}
-      .title{font-weight:700;margin-bottom:10px}
-      .row{display:flex;align-items:center;gap:12px;margin:6px 0 8px}
-      .qtyBox{display:flex;align-items:center;border:1px solid #e6e8eb;border-radius:12px;background:#fff;overflow:hidden}
-      .inc{width:40px;height:40px;font-size:20px;border:0;background:#f7f8fa}
-      .qtyInputWrap{display:flex;align-items:center;gap:6px;padding:0 8px}
-      .qtyInput{width:90px;text-align:right;font-weight:700;border:0;outline:none;font-size:16px;background:transparent}
-      .unit{color:#6a7077;font-weight:600}
-      .pill{border:1px solid #e6e8eb;border-radius:12px;background:#f7f8fa;padding:8px 12px}
-      .hint{margin-top:6px;color:#6a7077;font-size:13px}
-    `}</style>
-  </div>
-);
-
+  );
 
   function EndStep(which: 'left' | 'right') {
     const choice = which === 'left' ? left : right;
