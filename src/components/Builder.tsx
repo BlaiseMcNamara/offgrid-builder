@@ -354,31 +354,63 @@ export default function Builder() {
     </div>
   );
 
+   // Converts typed text into a 2-decimal metres value (0.01 m = 1 cm)
+function setLengthFromInput(raw: string) {
+  const val = raw.replace(',', '.');         // allow 1,25 as 1.25
+  const n = Number(val);
+  if (Number.isNaN(n)) return;               // ignore junk while typing
+  const clamped = Math.max(0, Math.round(n * 100) / 100);
+  setLengthM(Number(clamped.toFixed(2)));
+}
+
+
   const Step2 = (
-    <div className="card">
-      <div className="title">Length</div>
-      <div className="row">
-        <div className="qtyBox">
-          <button className="inc" onClick={() => bump(-0.01)}>-</button>
-          <div className="qty">{fmtM(lengthM)}</div>
-          <button className="inc" onClick={() => bump(+0.01)}>+</button>
+  <div className="card">
+    <div className="title">Length</div>
+
+    <div className="row">
+      <div className="qtyBox">
+        <button className="inc" onClick={() => bump(-0.01)} aria-label="decrease length">−</button>
+
+        {/* ✅ You can now type the length in metres with 2 decimals */}
+        <div className="qtyInputWrap">
+          <input
+            className="qtyInput"
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={lengthM.toFixed(2)}
+            onChange={(e) => setLengthFromInput(e.target.value)}
+            onBlur={(e) => setLengthFromInput(e.target.value)} // normalize to 2dp on blur
+          />
+          <span className="unit">m</span>
         </div>
-        <div className="pill">{pairMode ? 'Pair (red/black)' : 'Single core'}</div>
+
+        <button className="inc" onClick={() => bump(+0.01)} aria-label="increase length">+</button>
       </div>
-      <div className="hint">Prices update live from Shopify. Base is per cm; totals include {pairMode ? 'both cores' : 'the core'}.</div>
-      {totalsBox()}
-      <style jsx>{`
-        .card{border:1px solid #e6e8eb;border-radius:18px;background:#fff;padding:16px}
-        .title{font-weight:700;margin-bottom:10px}
-        .row{display:flex;align-items:center;gap:12px;margin:6px 0 8px}
-        .qtyBox{display:flex;align-items:center;border:1px solid #e6e8eb;border-radius:12px;background:#fff;overflow:hidden}
-        .qty{min-width:120px;text-align:center;font-weight:700;padding:8px 12px}
-        .inc{width:40px;height:40px;font-size:18px;border:0;background:#f7f8fa}
-        .pill{border:1px solid #e6e8eb;border-radius:12px;background:#f7f8fa;padding:8px 12px}
-        .hint{margin-top:6px;color:#6a7077;font-size:13px}
-      `}</style>
+
+      <div className="pill">{pairMode ? 'Pair (red/black)' : 'Single core'}</div>
     </div>
-  );
+
+    <div className="hint">1 cm = 0.01 m. Current length ≈ <strong>{lengthCm}</strong> cm.</div>
+    {totalsBox()}
+
+    <style jsx>{`
+      .card{border:1px solid #e6e8eb;border-radius:18px;background:#fff;padding:16px}
+      .title{font-weight:700;margin-bottom:10px}
+      .row{display:flex;align-items:center;gap:12px;margin:6px 0 8px}
+      .qtyBox{display:flex;align-items:center;border:1px solid #e6e8eb;border-radius:12px;background:#fff;overflow:hidden}
+      .inc{width:40px;height:40px;font-size:20px;border:0;background:#f7f8fa}
+      .qtyInputWrap{display:flex;align-items:center;gap:6px;padding:0 8px}
+      .qtyInput{width:90px;text-align:right;font-weight:700;border:0;outline:none;font-size:16px;background:transparent}
+      .unit{color:#6a7077;font-weight:600}
+      .pill{border:1px solid #e6e8eb;border-radius:12px;background:#f7f8fa;padding:8px 12px}
+      .hint{margin-top:6px;color:#6a7077;font-size:13px}
+    `}</style>
+  </div>
+);
+
 
   function EndStep(which: 'left' | 'right') {
     const choice = which === 'left' ? left : right;
