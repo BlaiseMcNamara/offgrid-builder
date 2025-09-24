@@ -3,17 +3,15 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Cable Builder — The Offgrid Doctor',
-  description: 'Design precision power cables — clean, fast and exact.'
+  description: 'Design precision power cables — clean, fast and exact.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        {children}
-
-        {/* GLOBAL LIGHT THEME LOCK */}
-        <style jsx global>{`
+      <head>
+        {/* GLOBAL LIGHT THEME (server-safe; no styled-jsx) */}
+        <style>{`
           :root {
             --bg: #ffffff;
             --text: #0a0a0a;
@@ -28,9 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
           }
-          * { color-scheme: light; } /* prevents Safari/Chrome dark auto */
+          * { color-scheme: light; } /* prevent automatic dark adjustments */
         `}</style>
-      </body>
+      </head>
+      <body>{children}</body>
     </html>
   )
 }
