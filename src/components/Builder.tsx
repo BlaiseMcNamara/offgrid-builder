@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 /* ================================================================
-   STEP INDICATOR (inline, so the file is drop-in)
+   STEP INDICATOR
 ================================================================ */
 function Steps({
   labels,
@@ -49,13 +49,13 @@ const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = 
   Lug: {
     label: 'Lugs',
     variants: [
-      { id: 'lug-6mm-6hole', label: '6mm² • 6mm hole', compat: ['8','6mm','6'] },
+      { id: 'lug-6mm-6hole',  label: '6mm² • 6mm hole',  compat: ['8','6mm','6'] },
       { id: 'lug-10mm-8hole', label: '10mm² • 8mm hole', compat: ['6','4','3'] },
       { id: 'lug-25mm-8hole', label: '25mm² • 8mm hole', compat: ['3','2','1'] },
-      { id: 'lug-35mm-10hole', label: '35mm² • 10mm hole', compat: ['1','0'] },
-      { id: 'lug-50mm-10hole', label: '50mm² • 10mm hole', compat: ['0','00'] },
-      { id: 'lug-70mm-10hole', label: '70mm² • 10mm hole', compat: ['00','000'] },
-      { id: 'lug-95mm-12hole', label: '95mm² • 12mm hole', compat: ['000','0000'] },
+      { id: 'lug-35mm-10hole',label: '35mm² • 10mm hole',compat: ['1','0'] },
+      { id: 'lug-50mm-10hole',label: '50mm² • 10mm hole',compat: ['0','00'] },
+      { id: 'lug-70mm-10hole',label: '70mm² • 10mm hole',compat: ['00','000'] },
+      { id: 'lug-95mm-12hole',label: '95mm² • 12mm hole',compat: ['000','0000'] },
     ],
   },
   BatteryClamp: {
@@ -68,7 +68,7 @@ const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = 
   Anderson: {
     label: 'Anderson plugs',
     variants: [
-      { id: 'sb50', label: 'SB50', compat: ['8','6','4','3'] },
+      { id: 'sb50',  label: 'SB50',  compat: ['8','6','4','3'] },
       { id: 'sb120', label: 'SB120', compat: ['2','1','0'] },
       { id: 'sb175', label: 'SB175', compat: ['0','00','000'] },
       { id: 'sb350', label: 'SB350', compat: ['000','0000'] },
@@ -76,12 +76,27 @@ const END_OPTIONS: Record<EndType, { label: string; variants: EndVariant[] }> = 
   },
 };
 
+// Dropdown choices per family (must match your Shopify SKU scheme)
+const GAUGES: Record<Family, Gauge[]> = {
+  BatterySingle: ['0000','000','00','0','1','2','3','4','6','8','6mm'],
+  BatteryTwin:   ['0000','000','00','0','1','2','3','4','6','8','6mm'],
+  Welding:       ['95mm2','70mm2','50mm2','35mm2'],
+};
+
+// Map Welding sizes to equivalent B&S for end compatibility lookups
+const GAUGE_COMPAT_ALIAS: Record<string, string> = {
+  '95mm2': '0000',
+  '70mm2': '000',
+  '50mm2': '00',
+  '35mm2': '0',
+};
+
 const cents = (n: number) => Math.round(n * 100);
 const fmt = (cents: number) => (cents / 100).toFixed(2);
 const fmtM = (m: number) => `${m.toFixed(2)} m`;
 
 /* ================================================================
-   SMALL ICONS
+   SMALL UI PIECES
 ================================================================ */
 function TypeTile({
   label,
@@ -140,9 +155,9 @@ export default function Builder() {
   const [step, setStep] = useState(0);
 
   const [family, setFamily] = useState<Family>('BatterySingle');
-  const [gauge, setGauge] = useState<Gauge>('4');
-  const [lengthM, setLengthM] = useState<number>(1.0); // default 1.00 m
-  const [pairMode, setPairMode] = useState<boolean>(false); // auto when BatteryTwin
+  const [gauge, setGauge] = useState<Gauge>(GAUGES['BatterySingle'][0]);
+  const [lengthM, setLengthM] = useState<number>(1.0);
+  const [pairMode, setPairMode] = useState<boolean>(false);
 
   const [left, setLeft] = useState<EndChoice>({ type: '', variantId: '' });
   const [right, setRight] = useState<EndChoice>({ type: '', variantId: '' });
@@ -152,11 +167,9 @@ export default function Builder() {
 
   const lengthCm = Math.round(lengthM * 100);
 
-  // pricing cache (live from Shopify)
   const [priceCache, setPriceCache] = useState<Record<string, number | null>>({});
   const [loadingPrices, setLoadingPrices] = useState(false);
 
-  // SKUs
   const baseSku = `CABLE-${family}-${gauge}-CM`;
   const sleeveSku = `SLEEVE-${gauge}-CM`;
   const insSku = 'INSULATOR-LUG-BOOT';
@@ -168,7 +181,6 @@ export default function Builder() {
     []
   );
 
-  // fetch prices helper
   async function fetchPrices(skus: string[]) {
     setLoadingPrices(true);
     try {
@@ -181,25 +193,30 @@ export default function Builder() {
       const next: Record<string, number | null> = { ...priceCache };
       for (const [k, v] of Object.entries(j.prices)) next[k] = v?.price ?? null;
       setPriceCache(next);
-    } catch (e) {
-      // ignore; totals will show missing price
+    } catch {
+      /* ignore */
     } finally {
       setLoadingPrices(false);
     }
   }
 
-  // On family/gauge change: fetch base+sleeve+ins+all ends; reset ends; set pair mode
+  // Keep gauge valid when family changes; reset ends; toggle pair
   useEffect(() => {
+    const options = GAUGES[family];
+    setGauge((g) => (options.includes(g) ? g : options[0]));
     setLeft({ type: '', variantId: '' });
     setRight({ type: '', variantId: '' });
     setPairMode(family === 'BatteryTwin');
+    // fetch happens in the next effect (on actual gauge/family value)
+  }, [family]);
+
+  // fetch prices whenever (family,gauge) change
+  useEffect(() => {
     void fetchPrices([baseSku, sleeveSku, insSku, ...allEndSkus]);
   }, [family, gauge]); // eslint-disable-line
 
-  // price reader
   const p = (sku: string) => priceCache[sku];
 
-  // computed totals
   const baseCableCents = cents((p(baseSku) ?? 0) * lengthCm * (pairMode ? 2 : 1));
   const sleeveCents =
     addSleeve && p(sleeveSku) != null
@@ -222,19 +239,20 @@ export default function Builder() {
   const gst = Math.round(subtotal * 0.1);
   const total = subtotal + gst;
 
-  // filtering: only types with at least 1 compatible variant
+  // compatibility key (alias for Welding)
+  const compatKey = GAUGE_COMPAT_ALIAS[gauge] ?? gauge;
+
   const availableTypes: EndType[] = useMemo(() => {
     return (Object.keys(END_OPTIONS) as EndType[]).filter((t) =>
-      END_OPTIONS[t].variants.some((v) => v.compat.includes(gauge))
+      END_OPTIONS[t].variants.some((v) => v.compat.includes(compatKey))
     );
-  }, [gauge]);
+  }, [compatKey]);
 
   function compatibleVariants(t: EndType | ''): EndVariant[] {
     if (!t) return [];
-    return END_OPTIONS[t as EndType].variants.filter((v) => v.compat.includes(gauge));
+    return END_OPTIONS[t].variants.filter((v) => v.compat.includes(compatKey));
   }
 
-  // Length controls: +/- 1cm (0.01 m)
   const bump = (delta: number) => {
     setLengthM((x) => {
       const v = Math.max(0.01, Math.round((x + delta) * 100) / 100);
@@ -260,7 +278,6 @@ export default function Builder() {
     );
   }
 
-  // build Shopify line items
   function buildShopifyLineItems() {
     const items: any[] = [];
     const props: any = {
@@ -287,7 +304,6 @@ export default function Builder() {
   }
 
   async function addToCart() {
-    // guard missing prices
     const missing: string[] = [];
     if (p(baseSku) == null) missing.push(baseSku);
     if (addSleeve && p(sleeveSku) == null) missing.push(sleeveSku);
@@ -297,11 +313,10 @@ export default function Builder() {
 
     if (missing.length) { alert(`Missing price for: ${missing.join(', ')}`); return; }
 
-    const items = buildShopifyLineItems();
     const r = await fetch('/api/add-to-cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ items: buildShopifyLineItems() }),
     });
     const { checkoutUrl, error } = await r.json();
     if (error) { alert(error); return; }
@@ -315,19 +330,18 @@ export default function Builder() {
     <div className="card">
       <div className="title">Choose your cable</div>
       <div className="gridTiles">
-        <TypeTile label="Battery — Single Core" active={family === 'BatterySingle'} onClick={() => { setFamily('BatterySingle'); setPairMode(false); }} />
-        <TypeTile label="Welding Cable" active={family === 'Welding'} onClick={() => { setFamily('Welding'); setPairMode(false); }} />
-        <TypeTile label="Battery — Twin (pair)" active={family === 'BatteryTwin'} onClick={() => { setFamily('BatteryTwin'); setPairMode(true); }} />
+        <TypeTile label="Battery — Single Core" active={family === 'BatterySingle'} onClick={() => setFamily('BatterySingle')} />
+        <TypeTile label="Welding Cable" active={family === 'Welding'} onClick={() => setFamily('Welding')} />
+        <TypeTile label="Battery — Twin (pair)" active={family === 'BatteryTwin'} onClick={() => setFamily('BatteryTwin')} />
       </div>
 
       <div className="mt12">
         <label className="lab">Gauge</label>
-        <input
-          className="input"
-          value={gauge}
-          onChange={(e) => setGauge(e.target.value as Gauge)}
-          placeholder="e.g. 4, 0, 00, 6mm, 95mm2"
-        />
+        <select className="select" value={gauge} onChange={(e) => setGauge(e.target.value as Gauge)}>
+          {GAUGES[family].map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
       </div>
       <style jsx>{`
         .card{border:1px solid #e6e8eb;border-radius:18px;background:#fff;padding:16px}
@@ -335,7 +349,7 @@ export default function Builder() {
         .gridTiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
         .mt12{margin-top:12px}
         .lab{display:block;margin-bottom:6px;color:#4f5560;font-weight:600}
-        .input{width:100%;padding:10px 12px;border:1px solid #e6e8eb;border-radius:12px;background:#fff}
+        .select{width:100%;padding:10px 12px;border:1px solid #e6e8eb;border-radius:12px;background:#fff}
       `}</style>
     </div>
   );
@@ -351,11 +365,8 @@ export default function Builder() {
         </div>
         <div className="pill">{pairMode ? 'Pair (red/black)' : 'Single core'}</div>
       </div>
-
       <div className="hint">Prices update live from Shopify. Base is per cm; totals include {pairMode ? 'both cores' : 'the core'}.</div>
-
       {totalsBox()}
-
       <style jsx>{`
         .card{border:1px solid #e6e8eb;border-radius:18px;background:#fff;padding:16px}
         .title{font-weight:700;margin-bottom:10px}
@@ -465,7 +476,6 @@ export default function Builder() {
 
       {panels[step]}
 
-      {/* NAV (no summary on step 1; prices from step 2 shown inside each panel) */}
       <div className="nav">
         <button className="btn" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
           Back
